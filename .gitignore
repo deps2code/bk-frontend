@@ -1,0 +1,7 @@
+node_modules/
+dist/
+*.local
+.DS_Store
+
+# raw municipal dataset (68 MB) — source for scripts/build-data.mjs
+Bomen gemeente Groningen.json

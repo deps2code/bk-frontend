@@ -1,0 +1,1 @@
+{"root":["./src/App.tsx","./src/MapView.tsx","./src/Sidebar.tsx","./src/main.tsx","./src/vite-env.d.ts","./src/lib/archetypes.ts","./src/lib/details.ts","./src/lib/filters.ts","./src/lib/layers.ts","./src/lib/loadTrees.ts","./src/lib/meshes.ts","./src/lib/popup.ts","./src/lib/urlState.ts"],"version":"5.9.3"}
