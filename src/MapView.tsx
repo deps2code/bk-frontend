@@ -4,7 +4,8 @@ import { useCallback, useEffect, useMemo, useRef } from "react";
 import maplibregl from "maplibre-gl";
 import { MapboxOverlay } from "@deck.gl/mapbox";
 import { buildTreeLayers, pickedGlobalIndex } from "./lib/layers";
-import { buildMeshes } from "./lib/meshes";
+import { buildDetailMeshes, buildMeshes } from "./lib/meshes";
+import { DETAIL_MIN_ZOOM, selectDetail, type DetailSelection } from "./lib/lod";
 import type { TreeData } from "./lib/loadTrees";
 import type { Filters } from "./lib/filters";
 import { getDetails, type Details } from "./lib/details";
@@ -28,7 +29,8 @@ export function MapView({ data, filters, onMapReady }: Props) {
   const popupRef = useRef<maplibregl.Popup | null>(null);
   const detailsRef = useRef<Details | null>(null);
   const labelLayerRef = useRef<string | undefined>(undefined);
-  const meshes = useMemo(buildMeshes, []);
+  const detailRef = useRef<DetailSelection | null>(null);
+  const meshes = useMemo(() => ({ base: buildMeshes(), detail: buildDetailMeshes() }), []);
 
   const dataRef = useRef(data);
   dataRef.current = data;
@@ -58,9 +60,25 @@ export function MapView({ data, filters, onMapReady }: Props) {
     const d = dataRef.current;
     if (!map || !d || !overlayRef.current) return;
     overlayRef.current.setProps({
-      layers: buildTreeLayers(d, filtersRef.current, map.getZoom(), meshes, labelLayerRef.current),
+      layers: buildTreeLayers(d, filtersRef.current, map.getZoom(), meshes, detailRef.current, labelLayerRef.current),
     });
   }, [meshes]);
+
+  // Reselect which trees get the detailed mesh — on moveend/data only, never per frame.
+  const updateDetail = useCallback(() => {
+    const map = mapRef.current;
+    const d = dataRef.current;
+    if (!map || !d || map.getZoom() < DETAIL_MIN_ZOOM) {
+      detailRef.current = null;
+      return;
+    }
+    const b = map.getBounds();
+    const c = map.getCenter();
+    detailRef.current = selectDetail(d, {
+      west: b.getWest(), south: b.getSouth(), east: b.getEast(), north: b.getNorth(),
+      clon: c.lng, clat: c.lat,
+    });
+  }, []);
 
   useEffect(() => {
     const cam = readHash().camera ?? DEFAULT_CAMERA;
@@ -94,6 +112,31 @@ export function MapView({ data, filters, onMapReady }: Props) {
       const srcId = Object.keys(style.sources).find((id) => style.sources[id].type === "vector");
       labelLayerRef.current = style.layers.find((l) => l.type === "symbol")?.id;
       if (srcId && !map.getLayer("3d-buildings")) {
+        // Fixed sun (anchor: map) so wall shading doesn't rotate with the camera.
+        map.setLight({ anchor: "map", position: [1.3, 210, 35], intensity: 0.35 });
+        // OpenMapTiles ships render_height: 0 when OSM has no height data —
+        // extruding that literally makes the building invisible. Give those a
+        // per-building pseudo-random 5-9 m instead of a uniform default.
+        const rawHeight: unknown = ["coalesce", ["get", "render_height"], 0];
+        const heightExpr: unknown = [
+          "case",
+          ["<=", rawHeight, 1],
+          ["+", 5, ["%", ["to-number", ["id"]], 5]],
+          rawHeight,
+        ];
+        // Muted Groningen facade palette (brick, sand, plaster), hashed off the
+        // feature id — quiet variation, trees stay the only saturated color.
+        const colorExpr: unknown = [
+          "match",
+          ["%", ["to-number", ["id"]], 6],
+          0, "#d8cfc2",
+          1, "#cfc6bb",
+          2, "#d3c2b4",
+          3, "#c8bfb6",
+          4, "#dcd5c9",
+          5, "#c4b6a8",
+          "#d0c8bd",
+        ];
         map.addLayer(
           {
             id: "3d-buildings",
@@ -102,8 +145,8 @@ export function MapView({ data, filters, onMapReady }: Props) {
             "source-layer": "building",
             minzoom: 13.4,
             paint: {
-              "fill-extrusion-color": "#e4e1db",
-              "fill-extrusion-height": ["coalesce", ["get", "render_height"], 8],
+              "fill-extrusion-color": colorExpr as any,
+              "fill-extrusion-height": heightExpr as any,
               "fill-extrusion-base": ["coalesce", ["get", "render_min_height"], 0],
               "fill-extrusion-vertical-gradient": true,
             },
@@ -126,6 +169,8 @@ export function MapView({ data, filters, onMapReady }: Props) {
 
     map.on("move", refresh);
     map.on("moveend", () => {
+      updateDetail();
+      refresh();
       const c = map.getCenter();
       updateHash({
         camera: { lon: c.lng, lat: c.lat, zoom: map.getZoom(), pitch: map.getPitch(), bearing: map.getBearing() },
@@ -142,7 +187,11 @@ export function MapView({ data, filters, onMapReady }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(refresh, [data, filters, refresh]);
+  useEffect(() => {
+    updateDetail(); // data just arrived (or map recreated) — seed the detail set
+    refresh();
+  }, [data, updateDetail, refresh]);
+  useEffect(refresh, [filters, refresh]);
 
   return <div ref={containerRef} className="map" />;
 }

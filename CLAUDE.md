@@ -27,6 +27,13 @@ Design rationale in DESIGN.md, user docs in README.md. UI text is Dutch.
   typed arrays. Never recreate these objects per render — deck would re-upload
   all 125k instances. Filter changes must go through `DataFilterExtension`
   uniforms only (see `filters.ts` / `layers.ts`).
+- **Near-camera LOD is additive, not a swap**: `src/lib/lod.ts` picks ≤12k
+  trees around the camera focus on `moveend` (zoom ≥ 15.3); those get a
+  detailed mesh (`trees-hi-*` layers) drawn *on top of* their still-rendered
+  base mesh — same color and opaque, so the base merging into the silhouette
+  is invisible. The `trees-hi-*` layers are `pickable: false`; picking/hover
+  stay on the base layers. Detail selection gets fresh data objects per
+  recompute (small re-upload); never touch the base layers' identity for LOD.
 - **`kiemjaar === 0` means unknown**. The year filter only excludes
   unknown-year trees when the user narrows the slider (`yearRangeActive`);
   keep that semantic when touching filters.
@@ -46,6 +53,9 @@ Design rationale in DESIGN.md, user docs in README.md. UI text is Dutch.
   global tree index. All per-tree arrays are indexed by that global index.
 - A hash-only `page.goto()` doesn't move the camera (same-document
   navigation) — reload after setting the hash when testing.
+- `pickObject()` reads the GPU picking buffer, so in tests it happily "finds"
+  trees behind the DOM sidebar — clicking there hits the sidebar (and may
+  toggle a filter). Scan for click targets at x ≳ 460 only.
 - The tree layers pass `beforeId` (first symbol layer) so map labels draw on
   top; the 3D buildings layer is inserted at the same point in `MapView.tsx`.
 

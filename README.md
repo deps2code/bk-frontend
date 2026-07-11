@@ -35,6 +35,9 @@ what the app actually loads.
 - **Two render modes by zoom**: colored dots below zoom ~14 (whole-city species
   map), instanced low-poly 3D trees above, with a cross-fade. Per-tree
   deterministic rotation/scale jitter avoids the copy-paste-forest look.
+- **Near-camera detail (LOD)**: above zoom ~15.3 the ≤12k trees nearest the
+  camera get richer meshes — multi-lobed shaded crowns, tapered trunks with
+  branch stubs — while the rest keep the cheap ~30-triangle mesh.
 - **Click a tree** → popup with species (Dutch + Latin), height (marked
   *geschat* when estimated), kiemjaar + age, street/buurt/stadsdeel, owner and
   a *Monumentale boom* badge.
@@ -74,8 +77,9 @@ src/App.tsx              state: tree data, filters, visible count, fly-to
 src/MapView.tsx          MapLibre init, deck.gl overlay, 3D buildings, popup, clicks
 src/Sidebar.tsx          filters UI, search box, dual-range slider
 src/lib/loadTrees.ts     trees.bin decoder + per-shape index tables
-src/lib/layers.ts        deck.gl layer factory (dots + 4 instanced mesh layers)
-src/lib/meshes.ts        procedural low-poly tree meshes (no GLTF assets)
+src/lib/layers.ts        deck.gl layer factory (dots + instanced mesh layers, base + detail)
+src/lib/meshes.ts        procedural tree meshes, base + detailed LOD (no GLTF assets)
+src/lib/lod.ts           near-camera selection for the detailed meshes
 src/lib/archetypes.ts    archetype table: names, colors, shapes (order = build-data.mjs)
 src/lib/filters.ts       filter model + GPU filter encoding + CPU count
 src/lib/details.ts       lazy details/search loaders, search matching

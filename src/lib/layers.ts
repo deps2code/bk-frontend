@@ -13,26 +13,75 @@ import { ARCHETYPES, MONUMENTAL_COLOR, SHAPES } from "./archetypes";
 import { jitter, type TreeData } from "./loadTrees";
 import type { TreeMesh } from "./meshes";
 import type { Shape } from "./archetypes";
+import type { DetailSelection } from "./lod";
 import { gpuFilterCategories, gpuFilterRange, type Filters } from "./filters";
 
 const DOT_FADE_START = 13.8;
 const DOT_FADE_END = 15.0;
 const MESH_MIN_ZOOM = 13.4;
 
+export interface TreeMeshes {
+  base: Record<Shape, TreeMesh>;
+  detail: Record<Shape, TreeMesh>;
+}
+
 /** Map a deck picking result back to the global tree index (-1 if not a tree). */
 export function pickedGlobalIndex(data: TreeData, info: PickingInfo | null): number {
   if (!info || info.index < 0 || !info.layer) return -1;
   const id = info.layer.id;
   if (id === "tree-dots") return info.index;
+  if (id.startsWith("trees-hi-")) return -1; // not pickable; defensive
   if (id.startsWith("trees-")) return data.shapeIndices[id.slice(6) as Shape][info.index];
   return -1;
+}
+
+/** Accessors shared by the base and detail mesh layers; `idx` maps the layer's local index to the global tree index. */
+function meshAccessors(data: TreeData, idx: Uint32Array, colorOf: (g: number) => [number, number, number]) {
+  return {
+    getPosition: (_: unknown, { index, target }: any) => {
+      const g = idx[index];
+      target[0] = data.lon[g];
+      target[1] = data.lat[g];
+      target[2] = 0;
+      return target;
+    },
+    getColor: (_: unknown, { index }: any) => colorOf(idx[index]),
+    getOrientation: (_: unknown, { index, target }: any) => {
+      target[0] = 0;
+      target[1] = jitter(idx[index], 1) * 360; // yaw
+      target[2] = 0;
+      return target;
+    },
+    getScale: (_: unknown, { index, target }: any) => {
+      const g = idx[index];
+      const h = data.heights[g];
+      const w = h * (0.82 + 0.36 * jitter(g, 2));
+      target[0] = w;
+      target[1] = w;
+      target[2] = h * (0.92 + 0.16 * jitter(g, 3));
+      return target;
+    },
+    getFilterValue: (_: unknown, { index, target }: any) => {
+      const g = idx[index];
+      target[0] = data.heights[g];
+      target[1] = data.years[g];
+      return target;
+    },
+    getFilterCategory: (_: unknown, { index, target }: any) => {
+      const g = idx[index];
+      target[0] = data.archetypes[g];
+      target[1] = data.flags[g] & 1;
+      return target;
+    },
+  };
 }
 
 export function buildTreeLayers(
   data: TreeData,
   filters: Filters,
   zoom: number,
-  meshes: Record<Shape, TreeMesh>,
+  meshes: TreeMeshes,
+  detail: DetailSelection | null,
   beforeId?: string,
 ): Layer[] {
   const ext = new DataFilterExtension({ filterSize: 2, categorySize: 2 });
@@ -93,46 +142,32 @@ export function buildTreeLayers(
         new SimpleMeshLayer({
           id: `trees-${shape}`,
           data: data.shapeData[shape],
-          mesh: meshes[shape] as any,
+          mesh: meshes.base[shape] as any,
           pickable: true,
-          getPosition: (_: unknown, { index, target }: any) => {
-            const g = idx[index];
-            target[0] = data.lon[g];
-            target[1] = data.lat[g];
-            target[2] = 0;
-            return target;
-          },
-          getColor: (_: unknown, { index }: any) => colorOf(idx[index]),
-          getOrientation: (_: unknown, { index, target }: any) => {
-            target[0] = 0;
-            target[1] = jitter(idx[index], 1) * 360; // yaw
-            target[2] = 0;
-            return target;
-          },
-          getScale: (_: unknown, { index, target }: any) => {
-            const g = idx[index];
-            const h = data.heights[g];
-            const w = h * (0.82 + 0.36 * jitter(g, 2));
-            target[0] = w;
-            target[1] = w;
-            target[2] = h * (0.92 + 0.16 * jitter(g, 3));
-            return target;
-          },
-          getFilterValue: (_: unknown, { index, target }: any) => {
-            const g = idx[index];
-            target[0] = data.heights[g];
-            target[1] = data.years[g];
-            return target;
-          },
-          getFilterCategory: (_: unknown, { index, target }: any) => {
-            const g = idx[index];
-            target[0] = data.archetypes[g];
-            target[1] = data.flags[g] & 1;
-            return target;
-          },
+          ...meshAccessors(data, idx, colorOf),
           ...filterProps,
         } as any),
       );
+    }
+
+    // --- detailed meshes over the near-camera subset (lod.ts) ---
+    // Drawn on top of the base mesh of the same tree; not pickable — picking
+    // and hover keep going through the base layers, which cover every tree.
+    if (detail) {
+      for (const shape of SHAPES) {
+        const idx = detail.indices[shape];
+        if (idx.length === 0) continue;
+        layers.push(
+          new SimpleMeshLayer({
+            id: `trees-hi-${shape}`,
+            data: detail.data[shape],
+            mesh: meshes.detail[shape] as any,
+            pickable: false,
+            ...meshAccessors(data, idx, colorOf),
+            ...filterProps,
+          } as any),
+        );
+      }
     }
   }
 

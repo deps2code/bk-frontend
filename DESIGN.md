@@ -77,15 +77,24 @@ handle 125k):
   no GLTF assets needed). Per-instance: scale from `heightM`, deterministic pseudo-random
   rotation + ±10% scale jitter from tree index (stable across frames, kills the
   copy-paste look). Cross-fade opacity over zoom 13.5–14.5 so the switch is soft.
+- **Near-camera LOD** (zoom ≥ 15.3): the ≤12k trees nearest the camera focus
+  (selected on `moveend`, `src/lib/lod.ts`) additionally draw a detailed mesh —
+  multi-lobed crown with baked per-face shading, tapered trunk, branch stubs —
+  on top of their base mesh. Everything else stays at ~30 tris, so total
+  vertex cost remains a few million triangles.
 - Monumental: brighter/warmer crown color in both modes; optional pulsing ring in
   "monumental" filter mode.
 
 Filters are GPU-side via `DataFilterExtension` (archetype, height range, plant-year
 range, monumental) — no re-upload, instant sliders.
 
-Buildings: MapLibre `fill-extrusion` from OpenFreeMap building heights, light gray,
-slight vertical gradient; deck.gl interleaved mode gives correct depth-occlusion
-between trees and buildings.
+Buildings: MapLibre `fill-extrusion` from OpenFreeMap building heights, muted
+facade palette (brick/sand/plaster) hashed off the feature id, vertical gradient
+plus a fixed-position light (`map.setLight`, anchor `map`) for directional wall
+shading; deck.gl interleaved mode gives correct depth-occlusion between trees
+and buildings. OpenMapTiles ships `render_height: 0` for buildings without OSM
+height data — those get a per-building pseudo-random 5–9 m so they never
+disappear.
 
 ## Interaction
 
