@@ -3,6 +3,10 @@
 
 export const MIN_SCALE = 2;
 export const MAX_SCALE = 24;
+/** CSS px per meter on first open (zoomed out vs. the old 90 m fit). */
+const DEFAULT_SCALE = 6.5;
+/** Meters the default view keeps across the short side on small screens. */
+const MIN_DEFAULT_SPAN = 55;
 const FOLLOW = 7; // 1/s, exponential follow rate
 
 export class Camera {
@@ -22,9 +26,13 @@ export class Camera {
     this.viewH = h;
   }
 
-  /** Default zoom: roughly 90 m across the shorter screen side. */
+  /**
+   * Default zoom for a fresh visit (no `#p=` hash): a fixed DEFAULT_SCALE, so
+   * the world looks the same size next to the HUD on any window. Tiny
+   * viewports zoom out further to keep MIN_DEFAULT_SPAN m on the short side.
+   */
   fitDefault() {
-    this.scale = clampScale(Math.min(this.viewW, this.viewH) / 90);
+    this.scale = clampScale(Math.min(DEFAULT_SCALE, Math.min(this.viewW, this.viewH) / MIN_DEFAULT_SPAN));
   }
 
   follow(tx: number, ty: number, dt: number) {

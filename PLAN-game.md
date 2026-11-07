@@ -1,6 +1,6 @@
 # Plan: Bomenkomen as a free-roam browser game
 
-Status: milestones 1–6 done (2026-11-07; milestone 5 profiled only in headless Chromium with 4× CPU throttling, not yet on a real phone), plus a welcome screen and a walk/bike toggle (F; bike 20 m/s, Shift 30); map-app code and dependencies already removed. Replaces the MapLibre/deck.gl
+Status: milestones 1–6 done (2026-11-07; milestone 5 profiled only in headless Chromium with 4× CPU throttling, not yet on a real phone), plus a welcome screen and a walk/bike toggle (F; walk 10.4 m/s, bike 26 m/s, Shift ×2/×1.5); map-app code and dependencies already removed. Replaces the MapLibre/deck.gl
 map app. The tree data pipeline and `public/data/*` are reused.
 
 ## What we are building

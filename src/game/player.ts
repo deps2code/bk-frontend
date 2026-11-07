@@ -9,7 +9,7 @@ import type { Mode } from "./store";
 import { WORLD_BOUNDS } from "./world";
 
 /** m/s [normal, Shift] — well above real pace; the city is ~20 km across. */
-export const SPEEDS: Record<Mode, [number, number]> = { walk: [8, 16], bike: [20, 30] };
+export const SPEEDS: Record<Mode, [number, number]> = { walk: [10.4, 20.8], bike: [26, 39] };
 /** 1/s, exponential approach to the target velocity. */
 const ACCEL: Record<Mode, number> = { walk: 14, bike: 4 };
 /** Collision radius in meters (true scale; the sprite is drawn larger). */
