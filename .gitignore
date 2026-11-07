@@ -5,3 +5,6 @@ dist/
 
 # raw municipal dataset (68 MB) — source for scripts/build-data.mjs
 Bomen gemeente Groningen.json
+
+# raw OSM / 3D BAG downloads — source for scripts/build-world.mjs
+raw/

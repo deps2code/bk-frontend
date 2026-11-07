@@ -21,8 +21,9 @@ export interface Details {
 export interface SearchEntry {
   n: string;
   t: "s" | "b"; // straat | buurt
-  lon: number;
-  lat: number;
+  /** RD New centroid, meters. */
+  x: number;
+  y: number;
   c: number;
 }
 

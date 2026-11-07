@@ -7,14 +7,20 @@
 //        public/data/details.json string-table-encoded popup details
 //        public/data/search.json  street/buurt centroids for fly-to search
 //
-// FORMAT trees.bin (little endian):
+// FORMAT trees.bin (little endian). Trees are sorted by 250 m chunk of the
+// RD grid (cy, then cx), north to south within a chunk; details.json uses the
+// same order. Every section starts 4-byte aligned for typed-array views.
 //   Uint32  N
-//   Int32   lon * 1e7   [N]
-//   Int32   lat * 1e7   [N]
+//   Uint32  C                      number of non-empty chunks
+//   per chunk [C]: Uint16 cx, Uint16 cy, Uint32 start, Uint32 count
+//   Int32   x  (RD New, dm)  [N]
+//   Int32   y  (RD New, dm)  [N]
 //   Uint16  kiemjaar    [N]   0 = unknown, clamped to [1750, THIS_YEAR]
 //   Uint8   height (m)  [N]   resolved, clamped to [3, 40]
 //   Uint8   archetype   [N]   index into ARCHETYPES
 //   Uint8   flags       [N]   bit0 monumental, bit1 height estimated
+//
+// search.json entries carry RD x/y (m) of the street/buurt centroid.
 
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { join, dirname } from "node:path";
@@ -24,6 +30,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const RAW = join(ROOT, "Bomen gemeente Groningen.json");
 const OUT = join(ROOT, "public", "data");
 const THIS_YEAR = new Date().getFullYear();
+const CHUNK_SIZE = 250; // m — must match src/game/world.ts
 
 // Fixed order — must match src/lib/archetypes.ts
 const ARCHETYPES = [
@@ -66,8 +73,8 @@ const feats = raw.features.filter((f) => f.geometry?.coordinates);
 const N = feats.length;
 console.log(`${N} trees`);
 
-const lon = new Int32Array(N);
-const lat = new Int32Array(N);
+const xs = new Int32Array(N);
+const ys = new Int32Array(N);
 const year = new Uint16Array(N);
 const height = new Uint8Array(N);
 const archetype = new Uint8Array(N);
@@ -92,9 +99,10 @@ const stats = { estimated: 0, defaultHeight: 0, badYear: 0, monumental: 0, perAr
 
 for (let i = 0; i < N; i++) {
   const p = feats[i].properties;
-  const [x, y] = feats[i].geometry.coordinates;
-  lon[i] = Math.round(x * 1e7);
-  lat[i] = Math.round(y * 1e7);
+  const x = p.X_COORDINAAT;
+  const y = p.Y_COORDINAAT;
+  xs[i] = Math.round(x * 10);
+  ys[i] = Math.round(y * 10);
 
   let yr = p.KIEMJAAR;
   if (!Number.isInteger(yr) || yr < 1750 || yr > THIS_YEAR) {
@@ -135,28 +143,52 @@ for (let i = 0; i < N; i++) {
 
   if (p.STRAAT) {
     const key = `${p.STRAAT}|${p.WOONPLAATS ?? ""}`;
-    const e = streetAgg.get(key) ?? { sumLon: 0, sumLat: 0, c: 0, straat: p.STRAAT, plaats: p.WOONPLAATS ?? "" };
-    e.sumLon += x; e.sumLat += y; e.c++;
+    const e = streetAgg.get(key) ?? { sumX: 0, sumY: 0, c: 0, straat: p.STRAAT, plaats: p.WOONPLAATS ?? "" };
+    e.sumX += x; e.sumY += y; e.c++;
     streetAgg.set(key, e);
   }
   if (p.BUURT) {
-    const e = buurtAgg.get(p.BUURT) ?? { sumLon: 0, sumLat: 0, c: 0 };
-    e.sumLon += x; e.sumLat += y; e.c++;
+    const e = buurtAgg.get(p.BUURT) ?? { sumX: 0, sumY: 0, c: 0 };
+    e.sumX += x; e.sumY += y; e.c++;
     buurtAgg.set(p.BUURT, e);
   }
 }
 
+// ---- sort by chunk ----
+const chunkKey = (i) => Math.floor(ys[i] / 10 / CHUNK_SIZE) * 100000 + Math.floor(xs[i] / 10 / CHUNK_SIZE);
+const order = Array.from({ length: N }, (_, i) => i).sort((a, b) => chunkKey(a) - chunkKey(b) || ys[b] - ys[a]);
+const permute = (arr) => { const out = new arr.constructor(N); order.forEach((src, dst) => (out[dst] = arr[src])); return out; };
+const sx = permute(xs), sy = permute(ys);
+const sYear = permute(year), sHeight = permute(height), sArch = permute(archetype), sFlags = permute(flags);
+for (const k of Object.keys(t)) t[k] = order.map((src) => t[k][src]);
+
+const chunkTable = []; // [cx, cy, start, count]
+for (let i = 0; i < N; i++) {
+  const cx = Math.floor(sx[i] / 10 / CHUNK_SIZE), cy = Math.floor(sy[i] / 10 / CHUNK_SIZE);
+  const last = chunkTable[chunkTable.length - 1];
+  if (last && last[0] === cx && last[1] === cy) last[3]++;
+  else chunkTable.push([cx, cy, i, 1]);
+}
+
 // ---- trees.bin ----
-const buf = Buffer.alloc(4 + N * (4 + 4 + 2 + 1 + 1 + 1));
+const C = chunkTable.length;
+const pad4 = (n) => (n + 3) & ~3;
+const buf = Buffer.alloc(pad4(8 + C * 12 + N * (4 + 4 + 2 + 1 + 1 + 1)));
 let off = 0;
 buf.writeUInt32LE(N, off); off += 4;
+buf.writeUInt32LE(C, off); off += 4;
+for (const [cx, cy, start, count] of chunkTable) {
+  buf.writeUInt16LE(cx, off); buf.writeUInt16LE(cy, off + 2);
+  buf.writeUInt32LE(start, off + 4); buf.writeUInt32LE(count, off + 8);
+  off += 12;
+}
 for (const [arr, write, size] of [
-  [lon, (v, o) => buf.writeInt32LE(v, o), 4],
-  [lat, (v, o) => buf.writeInt32LE(v, o), 4],
-  [year, (v, o) => buf.writeUInt16LE(v, o), 2],
-  [height, (v, o) => buf.writeUInt8(v, o), 1],
-  [archetype, (v, o) => buf.writeUInt8(v, o), 1],
-  [flags, (v, o) => buf.writeUInt8(v, o), 1],
+  [sx, (v, o) => buf.writeInt32LE(v, o), 4],
+  [sy, (v, o) => buf.writeInt32LE(v, o), 4],
+  [sYear, (v, o) => buf.writeUInt16LE(v, o), 2],
+  [sHeight, (v, o) => buf.writeUInt8(v, o), 1],
+  [sArch, (v, o) => buf.writeUInt8(v, o), 1],
+  [sFlags, (v, o) => buf.writeUInt8(v, o), 1],
 ]) {
   for (let i = 0; i < N; i++) { write(arr[i], off); off += size; }
 }
@@ -174,16 +206,16 @@ for (const e of streetAgg.values())
 const search = [];
 for (const e of streetAgg.values()) {
   const n = streetDupes.get(e.straat) > 1 && e.plaats ? `${e.straat} (${e.plaats})` : e.straat;
-  search.push({ n, t: "s", lon: +(e.sumLon / e.c).toFixed(6), lat: +(e.sumLat / e.c).toFixed(6), c: e.c });
+  search.push({ n, t: "s", x: Math.round(e.sumX / e.c), y: Math.round(e.sumY / e.c), c: e.c });
 }
 for (const [name, e] of buurtAgg) {
-  search.push({ n: name, t: "b", lon: +(e.sumLon / e.c).toFixed(6), lat: +(e.sumLat / e.c).toFixed(6), c: e.c });
+  search.push({ n: name, t: "b", x: Math.round(e.sumX / e.c), y: Math.round(e.sumY / e.c), c: e.c });
 }
 search.sort((a, b) => b.c - a.c);
 writeFileSync(join(OUT, "search.json"), JSON.stringify(search));
 
 // ---- report ----
-console.log(`\ntrees.bin    ${(buf.length / 1e6).toFixed(2)} MB`);
+console.log(`\ntrees.bin    ${(buf.length / 1e6).toFixed(2)} MB, ${C} chunks (max ${Math.max(...chunkTable.map((c) => c[3]))} trees/chunk)`);
 console.log(`details.json ${(JSON.stringify({ ...tables, t }).length / 1e6).toFixed(2)} MB (uncompressed)`);
 console.log(`search.json  ${search.length} entries`);
 console.log(`\nheights estimated: ${stats.estimated} (${(100 * stats.estimated / N).toFixed(1)}%), of which default 8 m: ${stats.defaultHeight}`);

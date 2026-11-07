@@ -34,6 +34,14 @@ export interface HudState {
   chunkY: number;
   /** Camera scale, CSS px per meter. */
   scale: number;
+  /** World data still loading (index + trees). */
+  loading: boolean;
+  error: string | null;
+  chunksLoaded: number;
+  treesDrawn: number;
 }
 
-export const hud = createStore<HudState>({ fps: 0, x: 0, y: 0, chunkX: 0, chunkY: 0, scale: 0 });
+export const hud = createStore<HudState>({
+  fps: 0, x: 0, y: 0, chunkX: 0, chunkY: 0, scale: 0,
+  loading: true, error: null, chunksLoaded: 0, treesDrawn: 0,
+});

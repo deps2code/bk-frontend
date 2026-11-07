@@ -16,6 +16,8 @@ export interface Vec {
 export class Input {
   /** Analog stick from the touch joystick, each axis in [-1, 1], y = north. */
   stick: Vec = { x: 0, y: 0 };
+  /** Off while a menu (e.g. the welcome screen) owns the keyboard. */
+  private on = true;
   private keys = new Set<string>();
 
   constructor() {
@@ -30,8 +32,18 @@ export class Input {
     window.removeEventListener("blur", this.clear);
   }
 
+  get enabled(): boolean {
+    return this.on;
+  }
+
+  set enabled(on: boolean) {
+    this.on = on;
+    if (!on) this.clear();
+  }
+
   /** Movement intent: x = east, y = north, length ≤ 1. */
   move(): Vec {
+    if (!this.on) return { x: 0, y: 0 };
     const any = (set: Set<string>) => [...set].some((k) => this.keys.has(k));
     let x = (any(RIGHT) ? 1 : 0) - (any(LEFT) ? 1 : 0) + this.stick.x;
     let y = (any(UP) ? 1 : 0) - (any(DOWN) ? 1 : 0) + this.stick.y;
@@ -48,7 +60,7 @@ export class Input {
   }
 
   private onKeyDown = (e: KeyboardEvent) => {
-    if (isTyping(e.target)) return;
+    if (!this.on || isTyping(e.target)) return;
     if (HANDLED.has(e.code)) e.preventDefault();
     this.keys.add(e.code);
   };

@@ -5,20 +5,26 @@ import { Camera } from "./camera";
 import { Input } from "./input";
 import { startLoop } from "./loop";
 import { Player } from "./player";
+import { drawBuildings } from "./render/buildings";
+import { drawDebugGrid } from "./render/debug";
 import { drawGround } from "./render/ground";
+import { drawLabels } from "./render/labels";
 import { drawPlayer } from "./render/sprites";
+import { drawTrees } from "./render/trees";
 import { hud } from "./store";
-import { SPAWN, chunkOf } from "./world";
+import { SPAWN, World, chunkOf } from "./world";
 
 const MAX_DPR = 2;
 const HUD_INTERVAL = 0.25; // s
 const HASH_INTERVAL = 1; // s
 
 export interface Game {
+  /** Keyboard movement and debug keys; off while a menu is open. */
+  setControlsEnabled(on: boolean): void;
   destroy(): void;
 }
 
-export function startGame(canvas: HTMLCanvasElement): Game {
+export function startGame(canvas: HTMLCanvasElement, opts: { controls?: boolean } = {}): Game {
   const ctx = canvas.getContext("2d", { alpha: false });
   if (!ctx) throw new Error("Canvas 2D wordt niet ondersteund");
 
@@ -26,6 +32,13 @@ export function startGame(canvas: HTMLCanvasElement): Game {
   const player = new Player(start?.x ?? SPAWN.x, start?.y ?? SPAWN.y);
   const camera = new Camera(player.x, player.y);
   const input = new Input();
+  input.enabled = opts.controls ?? true;
+  const world = new World();
+  world
+    .init(import.meta.env.BASE_URL)
+    .then(() => hud.set({ loading: false }))
+    .catch((e) => hud.set({ loading: false, error: e instanceof Error ? e.message : String(e) }));
+  let debugGrid = false;
 
   let dpr = 1;
   const resize = () => {
@@ -57,11 +70,17 @@ export function startGame(canvas: HTMLCanvasElement): Game {
   };
   window.addEventListener("hashchange", onHashChange);
 
+  const onKey = (e: KeyboardEvent) => {
+    if (e.code === "KeyG" && !e.repeat && input.enabled) debugGrid = !debugGrid;
+  };
+  window.addEventListener("keydown", onKey);
+
   let hudTimer = 0;
   let hashTimer = 0;
   let frames = 0;
   let fpsTime = 0;
   let lastHash = "";
+  let treesDrawn = 0;
 
   const update = (dt: number) => {
     player.update(dt, input);
@@ -72,8 +91,12 @@ export function startGame(canvas: HTMLCanvasElement): Game {
     const py = player.prevY + (player.y - player.prevY) * alpha;
     camera.follow(px, py, frameDt);
 
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    drawGround(ctx, camera);
+    const chunks = world.visible(camera.bounds());
+    drawGround(ctx, camera, dpr, chunks);
+    drawBuildings(ctx, camera, dpr, chunks);
+    if (world.trees) treesDrawn = drawTrees(ctx, camera, chunks, world.trees);
+    drawLabels(ctx, camera, chunks);
+    if (debugGrid) drawDebugGrid(ctx, camera);
     drawPlayer(ctx, camera.sx(px), camera.sy(py), camera.scale, player.facing, player.walkPhase, player.moving, "Jij");
 
     frames++;
@@ -88,6 +111,8 @@ export function startGame(canvas: HTMLCanvasElement): Game {
         chunkX: chunkOf(player.x),
         chunkY: chunkOf(player.y),
         scale: camera.scale,
+        chunksLoaded: world.loadedCount,
+        treesDrawn,
       });
       hudTimer = frames = fpsTime = 0;
     }
@@ -104,12 +129,17 @@ export function startGame(canvas: HTMLCanvasElement): Game {
   const stopLoop = startLoop(update, render);
 
   return {
+    setControlsEnabled(on) {
+      input.enabled = on;
+    },
     destroy() {
       stopLoop();
+      world.destroy();
       ro.disconnect();
       input.destroy();
       canvas.removeEventListener("wheel", onWheel);
       window.removeEventListener("hashchange", onHashChange);
+      window.removeEventListener("keydown", onKey);
     },
   };
 }
