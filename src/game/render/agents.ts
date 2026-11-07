@@ -6,20 +6,25 @@
 
 import type { Camera } from "../camera";
 import type { Agent } from "../traffic";
-import { CAR_COLORS, PED_LOOKS } from "../traffic";
+import { CAR_COLORS, CAR_LEN, CAR_WID, PED_LOOKS } from "../traffic";
 import type { Chunk } from "../worldFormat";
 import { CHUNK_SIZE } from "../world";
 import { insideFootprint } from "./buildings";
 import { HEIGHT_FACTOR, SHADOW } from "./geometry";
-import { drawFigure } from "./sprites";
+import { drawFigure, PLAYER_HEIGHT_M, playerHeightPx } from "./sprites";
 
 /** Car footprint in meters — a bit above true size, like the figures. */
-export const CAR_LEN = 6.2;
-export const CAR_WID = 2.7;
-/** Cars are drawn taller than true scale, like the player. */
-const CAR_Z = 1.5;
-const PED_HEIGHT_M = 3.4;
-const PED_MIN_PX = 22;
+/** Vertical stretch of the car boxes: the cabin top reaches ≈ ¾ of the player's height. */
+export const CAR_Z = 2.9;
+
+/**
+ * Extra on-screen size matching the player's minimum sprite size when zoomed
+ * out (so cars stay in proportion to the figures), capped so cars don't
+ * swamp the streets at the widest zoom.
+ */
+export function carBoost(scale: number): number {
+  return Math.min(2, playerHeightPx(scale) / (PLAYER_HEIGHT_M * scale));
+}
 
 /** Sort key: the south-most ground y of the agent's footprint. */
 export function agentSortY(a: { kind: string; heading: number }, y: number): number {
@@ -29,7 +34,8 @@ export function agentSortY(a: { kind: string; heading: number }, y: number): num
 
 export function drawAgent(ctx: CanvasRenderingContext2D, cam: Camera, a: Agent, x: number, y: number, night: number) {
   if (a.kind === "car") return drawCar(ctx, cam, a, x, y, night);
-  const h = Math.max(PED_MIN_PX, PED_HEIGHT_M * cam.scale);
+  // pedestrians and cyclists are drawn exactly as big as the player
+  const h = playerHeightPx(cam.scale);
   drawFigure(
     ctx,
     cam.sx(x),
@@ -44,17 +50,18 @@ export function drawAgent(ctx: CanvasRenderingContext2D, cam: Camera, a: Agent, 
 
 function drawCar(ctx: CanvasRenderingContext2D, cam: Camera, a: Agent, x: number, y: number, night: number) {
   const s = cam.scale;
+  const k = carBoost(s);
   const c = Math.cos(a.heading), sn = Math.sin(a.heading);
   // (along, right, z) → screen; right of heading is (sn, -c)
   const P = (al: number, r: number, z: number): [number, number] => [
     cam.sx(x + c * al + sn * r),
-    cam.sy(y + sn * al - c * r) - z * CAR_Z * HEIGHT_FACTOR * s,
+    cam.sy(y + sn * al - c * r) - z * CAR_Z * HEIGHT_FACTOR * s * k,
   ];
-  const L = CAR_LEN / 2, W = CAR_WID / 2;
+  const L = (CAR_LEN / 2) * k, W = (CAR_WID / 2) * k;
   const color = CAR_COLORS[a.look % CAR_COLORS.length];
 
   // ground shadow, cast south-east like the buildings'
-  const sh = 1.6 * CAR_Z;
+  const sh = 1.6 * CAR_Z * k;
   ctx.fillStyle = "rgba(40, 30, 20, 0.22)";
   ctx.beginPath();
   for (const [al, r] of [[L, W], [L, -W], [-L, -W], [-L, W]]) {
@@ -80,7 +87,7 @@ function drawCar(ctx: CanvasRenderingContext2D, cam: Camera, a: Agent, x: number
     for (const r of [-W * 0.62, W * 0.62]) {
       const [px, py] = P(al, r, 0.75);
       ctx.beginPath();
-      ctx.arc(px, py, Math.max(1, 0.2 * s), 0, Math.PI * 2);
+      ctx.arc(px, py, Math.max(1, 0.3 * s * k), 0, Math.PI * 2);
       ctx.fill();
     }
   }

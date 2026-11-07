@@ -8,7 +8,8 @@ import type { Camera } from "../camera";
 import type { Building, Chunk } from "../worldFormat";
 import type { TreeData } from "../../lib/loadTrees";
 import type { Agent } from "../traffic";
-import { agentSortY, CAR_LEN, drawAgent, drawLamp, LAMP_HEAD_Z, LAMP_MIN_SCALE } from "./agents";
+import { CAR_LEN } from "../traffic";
+import { agentSortY, CAR_Z, carBoost, drawAgent, drawLamp, LAMP_HEAD_Z, LAMP_MIN_SCALE } from "./agents";
 import { drawBuilding, hidesPlayer, roofLift } from "./buildings";
 import { HEIGHT_FACTOR } from "./geometry";
 import type { Night } from "./night";
@@ -148,11 +149,12 @@ export function drawScene(
 /** Headlight beams ahead of a car and a red glow behind it. */
 function carLights(night: Night, cam: Camera, a: Agent, x: number, y: number) {
   const c = Math.cos(a.heading), sn = Math.sin(a.heading);
-  const half = CAR_LEN / 2;
-  const fz = 0.75 * 1.5 * HEIGHT_FACTOR * cam.scale; // light height on screen
+  const k = carBoost(cam.scale);
+  const half = (CAR_LEN / 2) * k;
+  const fz = 0.75 * CAR_Z * HEIGHT_FACTOR * cam.scale * k; // light height on screen
   const fx = cam.sx(x + c * half), fy = cam.sy(y + sn * half);
   // screen y is down, so the screen angle of a world heading is −heading
-  night.beam(fx, fy, -a.heading, 18 * cam.scale, 0.38, 0.75);
-  night.glow(fx, fy - fz, 1.6 * cam.scale, "white", 0.8);
-  night.glow(cam.sx(x - c * half), cam.sy(y - sn * half) - fz, 1.4 * cam.scale, "red", 0.7);
+  night.beam(fx, fy, -a.heading, 24 * cam.scale, 0.38, 0.75);
+  night.glow(fx, fy - fz, 2.2 * cam.scale * k, "white", 0.8);
+  night.glow(cam.sx(x - c * half), cam.sy(y - sn * half) - fz, 2 * cam.scale * k, "red", 0.7);
 }

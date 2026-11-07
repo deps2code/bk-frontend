@@ -25,7 +25,7 @@ const OUTLINE = "rgba(30, 30, 30, 0.55)";
 const SHADOW = "rgba(0, 0, 0, 0.18)";
 
 /** Height of the player figure in meters (≈2.5× a real person). */
-const PLAYER_HEIGHT_M = 4.5;
+export const PLAYER_HEIGHT_M = 4.5;
 const MIN_HEIGHT_PX = 40;
 
 export interface PlayerView {

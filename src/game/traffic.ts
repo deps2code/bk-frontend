@@ -30,9 +30,16 @@ const SPAWN_MAX = 220;
 const DESPAWN = 280;
 const SPAWN_INTERVAL = 0.2; // s between spawn attempts
 const JOIN = 0.8; // m: ways this close to a way's end connect to it
-const CAR_GAP = 8; // m: a car stops this far behind an obstacle
-const CAR_LOOK = 16; // m: ...and starts slowing this far behind it
+const CAR_GAP = 12; // m (centre to obstacle): a car stops this far behind it
+const CAR_LOOK = 22; // m: ...and starts slowing this far behind it
 const FOLLOW = 12; // 1/s, smoothing of the drawn position around corners
+
+/**
+ * Car footprint in meters, at the player's cartoon scale (the player figure
+ * is ≈2.5× a real person): about twice the player's height long.
+ */
+export const CAR_LEN = 9;
+export const CAR_WID = 3.8;
 
 export const CAR_COLORS = ["#c8433a", "#2f5d8c", "#e9e6df", "#9aa1a8", "#2b2d31", "#d9a531", "#3d7a52", "#e9e6df"];
 export const PED_LOOKS = [
@@ -156,8 +163,8 @@ export class Traffic {
         if (along <= 0 || along >= free) return;
         if (Math.abs(rx * hy - ry * hx) < halfWidth) free = along;
       };
-      check(px, py, 2.6);
-      for (const o of this.agents) if (o !== a && o.kind !== "walker") check(o.x, o.y, o.kind === "car" ? 2.2 : 1.2);
+      check(px, py, CAR_WID / 2 + 0.8);
+      for (const o of this.agents) if (o !== a && o.kind !== "walker") check(o.x, o.y, o.kind === "car" ? 2.6 : 1.2);
       const target = free <= CAR_GAP ? 0 : (a.vmax * (free - CAR_GAP)) / (CAR_LOOK - CAR_GAP);
       const rate = target < a.speed ? 6 : 1.5; // brake hard, pull away gently
       a.speed += (target - a.speed) * (1 - Math.exp(-rate * dt));
@@ -294,8 +301,8 @@ function len(p: Float32Array, i: number, j: number): number {
 /** Keep right: cars in the right lane, people along the right-hand edge. */
 function sideOffset(kind: AgentKind, way: Way): number {
   const half = way.width / 2;
-  if (kind === "car") return Math.min(half * 0.5, 2);
-  if (way.kind <= 3) return Math.max(0, half - (kind === "cyclist" ? 1.2 : 0.7)); // road edge
+  if (kind === "car") return Math.max(CAR_WID / 2, Math.min(half * 0.5, 3));
+  if (way.kind <= 3) return Math.max(0, half - (kind === "cyclist" ? 1 : 0.2)); // road edge
   return (Math.random() - 0.3) * Math.min(half, 1); // on a path: anywhere, mostly right
 }
 
