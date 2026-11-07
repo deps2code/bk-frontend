@@ -10,7 +10,7 @@ import { useT } from "../lib/i18n";
 
 export function Hud({ game }: { game: Game | null }) {
   const s = useSyncExternalStore(hud.subscribe, hud.get);
-  const { mode } = useSyncExternalStore(controls.subscribe, controls.get);
+  const { mode, night } = useSyncExternalStore(controls.subscribe, controls.get);
   const T = useT();
   const [panel, setPanel] = useState<Panel>(() => (helpSeen() ? null : "help"));
   const toggle = (p: Exclude<Panel, null>) => setPanel((cur) => (cur === p ? null : p));
@@ -63,6 +63,7 @@ export function Hud({ game }: { game: Game | null }) {
       </div>
       <div className="hud-buttons">
         <LangSwitch />
+        <IconButton label={T.nightBtn} icon={MOON} active={night} onClick={() => controls.set({ night: !night })} />
         <IconButton label={T.searchBtn} icon={SEARCH} active={panel === "search"} onClick={() => toggle("search")} />
         <IconButton label={T.mapBtn} icon={MAP} active={panel === "map"} onClick={() => toggle("map")} />
         <IconButton label={T.helpBtn} icon={HELP} active={panel === "help"} onClick={() => toggle("help")} />
@@ -112,6 +113,7 @@ function IconButton(props: { label: string; icon: string; active: boolean; onCli
   );
 }
 
+const MOON = "M20.3 14.6A8.5 8.5 0 0 1 9.4 3.7 8.5 8.5 0 1 0 20.3 14.6Z";
 const PIN = "M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7Zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5Z";
 const SEARCH = "M10 3a7 7 0 1 0 4.2 12.6l5.1 5.1 1.4-1.4-5.1-5.1A7 7 0 0 0 10 3Zm0 2a5 5 0 1 1 0 10 5 5 0 0 1 0-10Z";
 const MAP = "m9 3-6 2.3v15.5l6-2.3 6 2.3 6-2.3V3l-6 2.3L9 3Zm1 2.6 4 1.5v11.3l-4-1.5V5.6ZM5 6.7l3-1.1v11.3l-3 1.2V6.7Zm11 .4 3-1.2v11.4l-3 1.1V7.1Z";

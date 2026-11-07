@@ -77,8 +77,25 @@ scripts only when inputs or the pipeline change.
   Game key handlers must ignore keys typed into inputs (`isTyping`).
 - Teleports (search, map click, hash) set `settle`: once the chunk is loaded
   the player is moved to the nearest free spot (`collision.findFree`).
-- Walk/bike mode lives in the `controls` store (`store.ts`, persisted to
-  localStorage); F or the HUD toggle switches it.
+- Walk/bike mode and day/night live in the `controls` store (`store.ts`,
+  persisted to localStorage); F / N or the HUD toggles switch them.
+- **Night** (`render/night.ts`): a light map multiplied over the finished
+  frame — dark-blue ambient plus additive glows (lamp pools, headlights,
+  around the player). The scene pass paints each building silhouette (with
+  its lit windows) and tree crown into it in y-order, so things in front hide
+  lights behind them. `level` fades 0↔1; nothing extra is drawn at day.
+- **Street lamps** are procedural (`render/agents.ts` `lampsOf`): every 32 m
+  along major/medium/minor roads and pedestrian streets, alternating sides,
+  skipping building footprints; cached on the chunk. Poles from 4 px/m.
+- **Traffic** (`traffic.ts`): a few cars, walkers and cyclists (`MAX`) follow
+  the road/path polylines kept at decode (`Chunk.ways`, line kinds
+  major..cycle). At a way's end an agent joins any allowed way within 0.8 m
+  (chunk seams and junctions alike), preferring straight on; dead ends turn
+  around. Cars keep right and brake for the player/cars ahead. They spawn
+  off-screen 35–220 m away and despawn past 280 m; purely visual (no
+  collision with the player). Drawn in the scene pass (`render/agents.ts`).
+  The dev server exposes `window.__bk` (traffic, night, player) for
+  headless checks.
 - `kiemjaar === 0` means unknown; heights are pre-resolved and flagged
   (`flags` bit 1 = estimated).
 

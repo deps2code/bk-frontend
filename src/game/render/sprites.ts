@@ -6,11 +6,17 @@
 import type { Facing } from "../player";
 import type { Mode } from "../store";
 
-const SKIN = "#e8b98f";
-const SHIRT = "#2f7d4a";
-const PANTS = "#3b4a6b";
-const PANTS_BACK = "#2e3a55";
-const HAIR = "#5a3b22";
+export interface Look {
+  skin: string;
+  shirt: string;
+  pants: string;
+  /** Far leg on the bike (defaults to `pants`). */
+  pantsBack?: string;
+  hair: string;
+}
+const PLAYER_LOOK: Required<Look> = { skin: "#e8b98f", shirt: "#2f7d4a", pants: "#3b4a6b", pantsBack: "#2e3a55", hair: "#5a3b22" };
+/** Look of the figure being drawn (set per drawFigure call). */
+let look: Required<Look> = PLAYER_LOOK;
 const FRAME = "#262626";
 const TYRE = "#1d1d1d";
 const SPOKE = "rgba(200, 200, 200, 0.8)";
@@ -36,13 +42,19 @@ export function playerHeightPx(scale: number): number {
 
 /** Draw the player with feet (or wheels) on screen point (x, y). */
 export function drawPlayer(ctx: CanvasRenderingContext2D, x: number, y: number, scale: number, v: PlayerView, name: string) {
-  const u = playerHeightPx(scale) / 10; // drawing unit
+  const headY = drawFigure(ctx, x, y, playerHeightPx(scale), v, PLAYER_LOOK);
+  nameTag(ctx, x, headY - 2.2 * (playerHeightPx(scale) / 10), playerHeightPx(scale) / 10, name);
+}
+
+/** A walker or cyclist `heightPx` tall with feet on (x, y); returns the head's y. */
+export function drawFigure(ctx: CanvasRenderingContext2D, x: number, y: number, heightPx: number, v: PlayerView, l: Look): number {
+  look = { pantsBack: l.pants, ...l };
+  const u = heightPx / 10; // drawing unit
   ctx.lineWidth = Math.max(1, u * 0.18);
   ctx.strokeStyle = OUTLINE;
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
-  const headY = v.mode === "bike" ? drawCyclist(ctx, x, y, u, v) : drawWalker(ctx, x, y, u, v);
-  nameTag(ctx, x, headY - 2.2 * u, u, name);
+  return v.mode === "bike" ? drawCyclist(ctx, x, y, u, v) : drawWalker(ctx, x, y, u, v);
 }
 
 // ---- walker ---------------------------------------------------------------
@@ -55,7 +67,7 @@ function drawWalker(ctx: CanvasRenderingContext2D, x: number, y: number, u: numb
   shadow(ctx, x, y, 2.4 * u, 0.9 * u);
 
   // legs: front/back views swing vertically, side views swing horizontally
-  ctx.fillStyle = PANTS;
+  ctx.fillStyle = look.pants;
   for (const s of [-1, 1]) {
     const lift = swing * s;
     const lx = side ? x + lift * 0.9 * u - 0.55 * u : x + s * 0.75 * u - 0.55 * u;
@@ -64,11 +76,11 @@ function drawWalker(ctx: CanvasRenderingContext2D, x: number, y: number, u: numb
   }
 
   const bodyTop = y - 6.8 * u - bob;
-  ctx.fillStyle = SHIRT;
+  ctx.fillStyle = look.shirt;
   roundRect(ctx, x - 1.7 * u, bodyTop, 3.4 * u, 3.9 * u, 1 * u);
 
   // arms swing opposite to legs
-  ctx.fillStyle = SKIN;
+  ctx.fillStyle = look.skin;
   for (const s of [-1, 1]) {
     const ax = side ? x - 0.4 * u - swing * s * 0.8 * u : x + s * 2.1 * u - 0.4 * u;
     roundRect(ctx, ax, bodyTop + 0.5 * u + (side ? 0 : swing * s * 0.3 * u), 0.8 * u, 2.8 * u, 0.4 * u);
@@ -102,7 +114,7 @@ function cyclistSide(ctx: CanvasRenderingContext2D, x: number, y: number, u: num
 
   const hip = { x: seat.x + 0.1 * u * d, y: seat.y - 0.4 * u };
   const pedal = (a: number) => ({ x: bb.x + Math.cos(a) * 0.85 * u, y: bb.y + Math.sin(a) * 0.85 * u });
-  leg(ctx, hip, pedal(crank + Math.PI), u, d, PANTS_BACK); // far leg behind the frame
+  leg(ctx, hip, pedal(crank + Math.PI), u, d, look.pantsBack); // far leg behind the frame
 
   // frame: chainstay, seat tube, low step-through tube, fork, stem and bar
   ctx.strokeStyle = FRAME;
@@ -130,15 +142,15 @@ function cyclistSide(ctx: CanvasRenderingContext2D, x: number, y: number, u: num
   ctx.lineWidth = Math.max(1, u * 0.18);
   roundRect(ctx, front.x - 0.2 * u * d - (d < 0 ? 1.5 * u : 0), y - 5.1 * u, 1.5 * u, 1.2 * u, 0.25 * u);
 
-  leg(ctx, hip, pedal(crank), u, d, PANTS);
+  leg(ctx, hip, pedal(crank), u, d, look.pants);
 
   // torso leaning to the bar, arm, head
   const bob = v.moving ? Math.abs(Math.sin(v.phase)) * 0.15 * u : 0;
   const shoulder = { x: x + 0.3 * u * d, y: y - 7.5 * u + bob };
-  ctx.strokeStyle = SHIRT;
+  ctx.strokeStyle = look.shirt;
   ctx.lineWidth = 1.7 * u;
   line(ctx, hip.x, hip.y, shoulder.x, shoulder.y);
-  ctx.strokeStyle = SKIN;
+  ctx.strokeStyle = look.skin;
   ctx.lineWidth = 0.65 * u;
   line(ctx, shoulder.x, shoulder.y + 0.3 * u, bar.x - 0.6 * u * d, bar.y);
 
@@ -159,14 +171,14 @@ function cyclistFront(ctx: CanvasRenderingContext2D, x: number, y: number, u: nu
   roundRect(ctx, x - 0.3 * u, y - 2.9 * u, 0.6 * u, 2.9 * u, 0.3 * u);
 
   // pedalling legs move up and down against each other
-  ctx.fillStyle = PANTS;
+  ctx.fillStyle = look.pants;
   for (const s of [-1, 1]) {
     const lift = pedal * s * 0.7 * u;
     roundRect(ctx, x + s * 0.8 * u - 0.55 * u, y - 4.4 * u - lift, 1.1 * u, 2.9 * u, 0.4 * u);
   }
 
   const bodyTop = y - 7.4 * u;
-  ctx.fillStyle = SHIRT;
+  ctx.fillStyle = look.shirt;
   roundRect(ctx, x - 1.7 * u, bodyTop, 3.4 * u, 3.6 * u, 1 * u);
 
   // handlebar with hands on the grips
@@ -174,7 +186,7 @@ function cyclistFront(ctx: CanvasRenderingContext2D, x: number, y: number, u: nu
   ctx.lineWidth = 0.4 * u;
   line(ctx, x - 2.3 * u, y - 5 * u, x + 2.3 * u, y - 5 * u);
   line(ctx, x, y - 5 * u, x, y - 2.6 * u);
-  ctx.strokeStyle = SKIN;
+  ctx.strokeStyle = look.skin;
   ctx.lineWidth = 0.65 * u;
   for (const s of [-1, 1]) line(ctx, x + s * 1.8 * u, bodyTop + 0.8 * u, x + s * 2.1 * u, y - 5 * u);
 
@@ -236,7 +248,7 @@ function head(ctx: CanvasRenderingContext2D, hx: number, hy: number, r: number, 
   const u = r / 1.7;
   ctx.beginPath();
   ctx.arc(hx, hy, r, 0, Math.PI * 2);
-  ctx.fillStyle = facing === "up" ? HAIR : SKIN;
+  ctx.fillStyle = facing === "up" ? look.hair : look.skin;
   ctx.fill();
   ctx.stroke();
   if (facing === "up") return;
@@ -244,7 +256,7 @@ function head(ctx: CanvasRenderingContext2D, hx: number, hy: number, r: number, 
   const start = facing === "left" ? Math.PI * 0.75 : facing === "right" ? Math.PI * 1.25 : Math.PI;
   ctx.arc(hx, hy, r, start, start + Math.PI);
   ctx.closePath();
-  ctx.fillStyle = HAIR;
+  ctx.fillStyle = look.hair;
   ctx.fill();
   ctx.fillStyle = "#222";
   const eyeY = hy + 0.35 * u;

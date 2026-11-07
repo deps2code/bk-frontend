@@ -39,6 +39,7 @@ const nl = {
   searchBtn: "Zoeken (/)",
   mapBtn: "Kaart (M)",
   helpBtn: "Hulp (H)",
+  nightBtn: "Nacht (N)",
 
   // help
   helpTitle: "Zo werkt het",
@@ -47,12 +48,14 @@ const nl = {
     ["Tik op een boom", "soort, leeftijd en straat"],
     ["Knijp", "in- en uitzoomen"],
     ["Kaartje", "tik voor de grote kaart en spring ergens heen"],
+    ["Maantje", "dag of nacht"],
   ] as [string, string][],
   helpKeys: [
     ["← ↑ ↓ → / WASD", "lopen · Shift = sneller"],
     ["F", "fiets pakken of wegzetten"],
     ["Klik of E", "boom bekijken (E = dichtstbijzijnde)"],
     ["/ · M", "zoeken · grote kaart"],
+    ["N", "dag of nacht"],
     ["Scroll", "in- en uitzoomen"],
   ] as [string, string][],
   helpOk: "Oké, op pad!",
@@ -128,6 +131,7 @@ const en: Dict = {
   searchBtn: "Search (/)",
   mapBtn: "Map (M)",
   helpBtn: "Help (H)",
+  nightBtn: "Night (N)",
 
   helpTitle: "How it works",
   helpTouch: [
@@ -135,12 +139,14 @@ const en: Dict = {
     ["Tap a tree", "species, age and street"],
     ["Pinch", "zoom in and out"],
     ["Minimap", "tap for the big map and jump anywhere"],
+    ["Moon", "day or night"],
   ],
   helpKeys: [
     ["← ↑ ↓ → / WASD", "walk · Shift = faster"],
     ["F", "get on or off the bike"],
     ["Click or E", "inspect a tree (E = nearest)"],
     ["/ · M", "search · big map"],
+    ["N", "day or night"],
     ["Scroll", "zoom in and out"],
   ],
   helpOk: "OK, let's go!",

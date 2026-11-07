@@ -182,5 +182,6 @@ at 390×844 with touch).
 
 ## Not in scope
 
-Multiplayer, missions, scores, NPCs, cars, day/night, sound. All of these
-can be added later on top of the same world data.
+Multiplayer, missions, scores, sound. All of these can be added later on
+top of the same world data. (Day/night and a little ambient traffic — cars,
+pedestrians, cyclists — have since been added; see CLAUDE.md.)

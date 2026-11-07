@@ -12,7 +12,10 @@ import { drawDebugGrid } from "./render/debug";
 import { GroundCache } from "./render/groundCache";
 import { drawLabels } from "./render/labels";
 import { drawStick, type StickView } from "./render/joystick";
+import { LAMP_MIN_SCALE, lampsOf } from "./render/agents";
+import { Night } from "./render/night";
 import { drawScene } from "./render/scene";
+import { Traffic } from "./traffic";
 import { hitsTree, type TreeHit } from "./render/trees";
 import { controls, hud, selection } from "./store";
 import { SPAWN, World, chunkOf } from "./world";
@@ -58,6 +61,11 @@ export function startGame(canvas: HTMLCanvasElement, opts: { controls?: boolean 
     .catch((e) => hud.set({ loading: false, error: e instanceof Error ? e.message : String(e) }));
   const ground = new GroundCache();
   const collision = new Collision(world);
+  const traffic = new Traffic(world);
+  const night = new Night();
+  // headless checks (dev server only): find agents, read the night level
+  if (import.meta.env.DEV) Object.assign(window, { __bk: { traffic, night, player } });
+  night.level = controls.get().night ? 1 : 0; // no fade on page load
   let debugGrid = false;
 
   let dpr = 1;
@@ -223,6 +231,7 @@ export function startGame(canvas: HTMLCanvasElement, opts: { controls?: boolean 
       hud.set({ debug: debugGrid });
     }
     if (e.code === "KeyF") controls.set({ mode: controls.get().mode === "bike" ? "walk" : "bike" });
+    if (e.code === "KeyN") controls.set({ night: !controls.get().night });
     if (e.code === "KeyE") select(nearestTree(12));
     if (e.code === "Escape") select(null);
   };
@@ -241,6 +250,7 @@ export function startGame(canvas: HTMLCanvasElement, opts: { controls?: boolean 
       if (free) player.teleport(free.x, free.y);
     }
     player.update(dt, input, controls.get().mode, collision);
+    if (world.ready) traffic.update(dt, player.x, player.y, camera.bounds());
   };
 
   const minimap = new Minimap();
@@ -267,7 +277,10 @@ export function startGame(canvas: HTMLCanvasElement, opts: { controls?: boolean 
     const py = player.prevY + (player.y - player.prevY) * alpha;
     camera.follow(px, py, frameDt);
 
-    const chunks = world.visible(camera.bounds());
+    const view = camera.bounds();
+    const chunks = world.visible(view);
+    night.update(controls.get().night, frameDt);
+    if (night.active) night.begin(canvas.width, canvas.height, dpr);
     ground.draw(ctx, camera, dpr, world);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     drawLabels(ctx, camera, chunks);
@@ -288,7 +301,9 @@ export function startGame(canvas: HTMLCanvasElement, opts: { controls?: boolean 
       },
       selection.get().tree?.index ?? null,
       performance.now() / 1000,
+      { agents: traffic.agents, alpha, lamps: lampsInView(chunks, view), night: night.active ? night : null },
     );
+    if (night.active) night.apply(ctx);
     if (debugGrid) {
       drawDebugGrid(ctx, camera);
       collision.drawDebug(ctx, camera);
@@ -330,6 +345,22 @@ export function startGame(canvas: HTMLCanvasElement, opts: { controls?: boolean 
         history.replaceState(null, "", hash);
       }
     }
+  };
+
+  const lampBuf: number[] = [];
+  /** Lamps whose light pool (or pole) reaches into the view. */
+  const lampsInView = (chunks: ReturnType<World["visible"]>, v: ReturnType<Camera["bounds"]>): number[] => {
+    lampBuf.length = 0;
+    if (!night.active && camera.scale < LAMP_MIN_SCALE) return lampBuf;
+    const m = 12;
+    for (const c of chunks) {
+      const l = lampsOf(c);
+      for (let k = 0; k < l.length; k += 2) {
+        const x = l[k], y = l[k + 1];
+        if (x > v.minX - m && x < v.maxX + m && y > v.minY - m && y < v.maxY + m) lampBuf.push(x, y);
+      }
+    }
+    return lampBuf;
   };
 
   const stopLoop = startLoop(update, render);

@@ -54,22 +54,27 @@ export const hud = createStore<HudState>({
 
 export type Mode = "walk" | "bike";
 const MODE_KEY = "bomenkomen.mode";
+const NIGHT_KEY = "bomenkomen.night";
 
-/** Player choices that outlive a session (per browser). */
-export const controls = createStore<{ mode: Mode }>({ mode: readMode() });
+/** Player choices that outlive a session (per browser): walk/bike, day/night. */
+export const controls = createStore<{ mode: Mode; night: boolean }>({
+  mode: read(MODE_KEY) === "bike" ? "bike" : "walk",
+  night: read(NIGHT_KEY) === "1",
+});
 controls.subscribe(() => {
   try {
     localStorage.setItem(MODE_KEY, controls.get().mode);
+    localStorage.setItem(NIGHT_KEY, controls.get().night ? "1" : "0");
   } catch {
     // storage blocked (private mode): the choice just isn't remembered
   }
 });
 
-function readMode(): Mode {
+function read(key: string): string | null {
   try {
-    return localStorage.getItem(MODE_KEY) === "bike" ? "bike" : "walk";
+    return localStorage.getItem(key);
   } catch {
-    return "walk";
+    return null;
   }
 }
 

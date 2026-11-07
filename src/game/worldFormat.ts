@@ -15,6 +15,19 @@ export interface LineGroup {
   path: Path2D;
 }
 
+/** A road or path polyline (kinds major..cycle), kept for traffic and lamps. */
+export interface Way {
+  kind: number;
+  /** Meters. */
+  width: number;
+  bridge: boolean;
+  /** Chunk-local meters, flat [x0, y0, x1, y1, …]. */
+  pts: Float32Array;
+}
+
+/** Line kinds that carry traffic (major..cycle); rail and water don't. */
+export const WAY_KINDS_END = 6;
+
 export interface Building {
   kind: number;
   /** Meters. */
@@ -58,6 +71,10 @@ export interface Chunk {
   labels: Label[];
   /** Line name ids present in this chunk, for "where am I" lookups. */
   streetNames: { nameId: number; pts: Float32Array }[];
+  /** Roads and paths (clipped to the chunk + 25 m, so they overlap neighbours). */
+  ways: Way[];
+  /** Street lamps, world RD meters [x, y, …] — built lazily by render/lamps.ts. */
+  lamps?: Float32Array;
 }
 
 export function decodeChunk(buf: ArrayBuffer, cx: number, cy: number, chunkSize: number, names: string[]): Chunk {
@@ -91,6 +108,7 @@ export function decodeChunk(buf: ArrayBuffer, cx: number, cy: number, chunkSize:
 
   const groups = new Map<string, LineGroup>();
   const streetNames: Chunk["streetNames"] = [];
+  const ways: Way[] = [];
   for (let i = 0; i < nLines; i++) {
     const kind = dv.getUint8(off);
     const bridge = (dv.getUint8(off + 1) & 1) !== 0;
@@ -104,6 +122,7 @@ export function decodeChunk(buf: ArrayBuffer, cx: number, cy: number, chunkSize:
     g.path.moveTo(pts[0], pts[1]);
     for (let p = 2; p < pts.length; p += 2) g.path.lineTo(pts[p], pts[p + 1]);
     if (nameId !== NO_NAME) streetNames.push({ nameId, pts });
+    if (kind < WAY_KINDS_END && pts.length >= 4) ways.push({ kind, width, bridge, pts });
   }
   // non-bridges first, then by kind (draw order), wider first within a kind
   const lines = [...groups.values()].sort(
@@ -146,7 +165,7 @@ export function decodeChunk(buf: ArrayBuffer, cx: number, cy: number, chunkSize:
     });
   }
 
-  return { cx, cy, ox, oy, ground, lines, buildings, labels, streetNames };
+  return { cx, cy, ox, oy, ground, lines, buildings, labels, streetNames, ways };
 }
 
 function signedArea(pts: Float32Array): number {

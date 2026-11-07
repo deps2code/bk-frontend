@@ -53,6 +53,11 @@ interface Gfx {
   roofColor: string;
 }
 
+/** Wall and roof paths (chunk-local m) and the lit windows, for the night light map. */
+export function buildingSilhouette(b: Building): { walls: (Path2D | null)[]; roof: Path2D; windowsLit: Path2D | null } {
+  return gfxOf(b);
+}
+
 export function roofLift(b: Building): number {
   return visualHeight(b.height) * HEIGHT_FACTOR;
 }
@@ -181,7 +186,7 @@ function ring(p: Path2D, r: Float32Array, ox: number, oy: number) {
 }
 
 /** Even-odd point-in-footprint over all rings (holes excluded). */
-function insideFootprint(b: Building, x: number, y: number): boolean {
+export function insideFootprint(b: Building, x: number, y: number): boolean {
   let inside = false;
   for (const r of b.rings) {
     for (let i = 0, j = r.length - 2; i < r.length; j = i, i += 2) {

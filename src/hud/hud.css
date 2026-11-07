@@ -95,7 +95,7 @@ html, body, #root { height: 100%; margin: 0; overflow: hidden; background: #e4dc
   display: flex;
   align-items: center;
   gap: 8px;
-  max-width: calc(100% - 300px);
+  max-width: calc(100% - 352px);
   padding: 8px 14px 8px 10px;
   border-radius: 999px;
   font-family: "Baloo 2 Variable", system-ui, sans-serif;
@@ -315,7 +315,7 @@ html, body, #root { height: 100%; margin: 0; overflow: hidden; background: #e4dc
 .help-ok { height: 52px; font-size: 22px; }
 
 @media (max-width: 720px) {
-  .hud-place { max-width: calc(100% - 268px); }
+  .hud-place { max-width: calc(100% - 314px); }
   .hud-buttons { gap: 6px; }
   .hud-icon-btn { width: 40px; height: 40px; }
   .lang-switch { height: 40px; }
