@@ -95,7 +95,7 @@ html, body, #root { height: 100%; margin: 0; overflow: hidden; background: #e4dc
   display: flex;
   align-items: center;
   gap: 8px;
-  max-width: calc(100% - 200px);
+  max-width: calc(100% - 300px);
   padding: 8px 14px 8px 10px;
   border-radius: 999px;
   font-family: "Baloo 2 Variable", system-ui, sans-serif;
@@ -142,6 +142,41 @@ html, body, #root { height: 100%; margin: 0; overflow: hidden; background: #e4dc
 .hud-icon-btn:hover { color: #fff; }
 .hud-icon-btn.is-active { background: #84bd00; color: #22320a; }
 .hud-icon-btn:focus-visible { outline: 2px solid var(--hud-accent); outline-offset: 2px; }
+
+/* NL | EN language toggle (HUD row and welcome screen) */
+.lang-switch {
+  display: flex;
+  gap: 2px;
+  height: 44px;
+  padding: 4px;
+  border-radius: 999px;
+  background: var(--hud-bg);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+  pointer-events: auto;
+}
+.lang-btn {
+  min-width: 36px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--hud-muted);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.lang-btn:hover { color: var(--hud-ink); }
+.lang-btn.is-active { background: #84bd00; color: #22320a; }
+.lang-btn:focus-visible { outline: 2px solid var(--hud-accent); outline-offset: 2px; }
+.lang-switch-welcome {
+  position: absolute;
+  top: calc(12px + env(safe-area-inset-top));
+  right: calc(12px + env(safe-area-inset-right));
+  z-index: 1;
+}
 
 .tree-card { top: calc(66px + env(safe-area-inset-top)); }
 
@@ -280,7 +315,11 @@ html, body, #root { height: 100%; margin: 0; overflow: hidden; background: #e4dc
 .help-ok { height: 52px; font-size: 22px; }
 
 @media (max-width: 720px) {
-  .hud-place { max-width: calc(100% - 180px); }
+  .hud-place { max-width: calc(100% - 268px); }
+  .hud-buttons { gap: 6px; }
+  .hud-icon-btn { width: 40px; height: 40px; }
+  .lang-switch { height: 40px; }
+  .lang-btn { min-width: 32px; padding: 0 6px; }
   .hud-place-buurt { display: none; }
   .hud-minimap {
     top: calc(66px + env(safe-area-inset-top));
@@ -292,4 +331,13 @@ html, body, #root { height: 100%; margin: 0; overflow: hidden; background: #e4dc
   }
   .search-sheet { left: calc(12px + env(safe-area-inset-left)); width: auto; }
   .help-sheet dl div { grid-template-columns: 112px 1fr; }
+}
+
+/* narrow phones: the top row is full (language + 3 buttons), so the place
+   tag drops below it, left of the minimap */
+@media (max-width: 480px) {
+  .hud-place {
+    top: calc(62px + env(safe-area-inset-top));
+    max-width: calc(100% - 148px);
+  }
 }

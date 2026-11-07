@@ -3,7 +3,10 @@
 Free-roam top-down browser game: walk through Groningen past all 124,990
 municipal trees at their real positions. Canvas 2D, React only for the HUD,
 static hosting, no backend. Roadmap and design in PLAN-game.md (README.md and
-DESIGN.md still describe the retired map app until milestone 8). UI text is Dutch.
+DESIGN.md still describe the retired map app until milestone 8). UI text is
+Dutch + English: every string lives in `src/lib/i18n.ts` (`useT()` in React,
+`t()` in game code; NL | EN toggle top-right, persisted to localStorage).
+Dataset strings (species, streets, buurten) stay Dutch.
 
 ## Commands
 

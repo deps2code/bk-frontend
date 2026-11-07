@@ -1,6 +1,8 @@
 // "Zo werkt het" — controls card, shown once on the first visit and on demand
 // via the ? button (H). Touch devices get gestures instead of keys.
 
+import { useT } from "../lib/i18n";
+
 const SEEN_KEY = "bomenkomen.help-seen";
 
 export function helpSeen(): boolean {
@@ -21,23 +23,11 @@ export function markHelpSeen() {
 
 export function Help({ onClose }: { onClose: () => void }) {
   const touch = window.matchMedia("(pointer: coarse)").matches;
-  const rows: [string, string][] = touch
-    ? [
-        ["Sleep", "lopen of fietsen — hoe verder, hoe sneller"],
-        ["Tik op een boom", "soort, leeftijd en straat"],
-        ["Knijp", "in- en uitzoomen"],
-        ["Kaartje", "tik voor de grote kaart en spring ergens heen"],
-      ]
-    : [
-        ["← ↑ ↓ → / WASD", "lopen · Shift = sneller"],
-        ["F", "fiets pakken of wegzetten"],
-        ["Klik of E", "boom bekijken (E = dichtstbijzijnde)"],
-        ["/ · M", "zoeken · grote kaart"],
-        ["Scroll", "in- en uitzoomen"],
-      ];
+  const T = useT();
+  const rows = touch ? T.helpTouch : T.helpKeys;
   return (
     <section className="hud-sheet help-sheet" aria-labelledby="help-title">
-      <h2 id="help-title">Zo werkt het</h2>
+      <h2 id="help-title">{T.helpTitle}</h2>
       <dl>
         {rows.map(([k, v]) => (
           <div key={k}>
@@ -47,7 +37,7 @@ export function Help({ onClose }: { onClose: () => void }) {
         ))}
       </dl>
       <button type="button" className="wl-btn wl-btn-play help-ok" onClick={onClose} autoFocus>
-        Oké, op pad!
+        {T.helpOk}
       </button>
     </section>
   );

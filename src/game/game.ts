@@ -16,6 +16,7 @@ import { drawScene } from "./render/scene";
 import { hitsTree, type TreeHit } from "./render/trees";
 import { controls, hud, selection } from "./store";
 import { SPAWN, World, chunkOf } from "./world";
+import { t } from "../lib/i18n";
 
 const MAX_DPR = 2;
 /** Joystick knob travel and the drag distance that turns a tap into a drag (CSS px). */
@@ -279,7 +280,7 @@ export function startGame(canvas: HTMLCanvasElement, opts: { controls?: boolean 
       {
         x: px,
         y: py,
-        name: "Jij",
+        name: t().you,
         mode: player.mode,
         facing: player.facing,
         phase: player.phase,

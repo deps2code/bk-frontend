@@ -3,12 +3,14 @@ import { startGame, type Game } from "./game/game";
 import { Hud } from "./hud/Hud";
 import { getDetails } from "./lib/details";
 import { Welcome } from "./hud/Welcome";
+import { useT } from "./lib/i18n";
 
 export default function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [game, setGame] = useState<Game | null>(null);
   const [playing, setPlaying] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const T = useT();
 
   // The world starts loading behind the welcome screen; controls stay off
   // until the player chooses to play.
@@ -35,9 +37,9 @@ export default function App() {
 
   return (
     <div className="game">
-      <canvas ref={canvasRef} tabIndex={-1} aria-label="Bomenkomen speelveld" />
+      <canvas ref={canvasRef} tabIndex={-1} aria-label={T.canvasLabel} />
       {error ? (
-        <div className="hud-panel hud-status hud-error">Er ging iets mis: {error}</div>
+        <div className="hud-panel hud-status hud-error">{T.errorPrefix} {error}</div>
       ) : playing ? (
         <Hud game={game} />
       ) : (

@@ -4,31 +4,35 @@
 
 import { useEffect, useRef, useState, useSyncExternalStore, type FormEvent } from "react";
 import { hud } from "../game/store";
+import { useT } from "../lib/i18n";
+import { LangSwitch } from "./LangSwitch";
 
 type Mode = "login" | "signup";
 
 export function Welcome({ onPlay }: { onPlay: () => void }) {
   const [mode, setMode] = useState<Mode>("login");
-  const [notice, setNotice] = useState<string | null>(null);
+  const [notice, setNotice] = useState(false);
   const loading = useSyncExternalStore(hud.subscribe, () => hud.get().loading);
   const playRef = useRef<HTMLButtonElement>(null);
+  const T = useT();
 
   useEffect(() => playRef.current?.focus(), []);
 
   const switchMode = (m: Mode) => {
     setMode(m);
-    setNotice(null);
+    setNotice(false);
   };
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    setNotice("Accounts komen binnenkort. Speel voorlopig als gast — je wandeling wordt nog niet bewaard.");
+    setNotice(true);
   };
 
   const login = mode === "login";
 
   return (
     <div className="welcome" role="dialog" aria-modal="true" aria-labelledby="wl-title">
+      <LangSwitch className="lang-switch-welcome" />
       <div className="wl-board">
         <div className="wl-plank" aria-hidden />
         <Leaf className="wl-leaf wl-leaf-1" />
@@ -40,47 +44,47 @@ export function Welcome({ onPlay }: { onPlay: () => void }) {
         </h1>
 
         <div className="wl-scroll">
-          <p className="wl-tagline">Wandel door Groningen langs alle 124.990 bomen</p>
+          <p className="wl-tagline">{T.tagline(124990)}</p>
 
-          <h2 className="wl-heading">{login ? "Inloggen" : "Account maken"}</h2>
+          <h2 className="wl-heading">{login ? T.login : T.createAccount}</h2>
           <form className="wl-form" onSubmit={submit}>
-            <Field icon="user" label="Gebruikersnaam" name="username" autoComplete="username" />
-            {!login && <Field icon="mail" label="E-mailadres" name="email" type="email" autoComplete="email" />}
+            <Field icon="user" label={T.username} name="username" autoComplete="username" />
+            {!login && <Field icon="mail" label={T.email} name="email" type="email" autoComplete="email" />}
             <Field
               icon="lock"
-              label="Wachtwoord"
+              label={T.password}
               name="password"
               type="password"
               autoComplete={login ? "current-password" : "new-password"}
             />
             <button type="submit" className="wl-btn wl-btn-wood">
-              {login ? "Inloggen" : "Registreren"}
+              {login ? T.login : T.register}
             </button>
           </form>
           {notice && (
             <p className="wl-notice" role="status">
-              {notice}
+              {T.accountsSoon}
             </p>
           )}
 
           <div className="wl-or">
-            <span>of</span>
+            <span>{T.or}</span>
           </div>
 
           <button ref={playRef} type="button" className="wl-btn wl-btn-play" onClick={onPlay}>
             <svg viewBox="0 0 24 24" aria-hidden>
               <path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.4-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5Z" />
             </svg>
-            Speel als gast
+            {T.playGuest}
           </button>
           <p className="wl-load" aria-live="polite">
-            {loading ? "Groningen wordt geladen…" : "Groningen staat klaar"}
+            {loading ? T.worldLoading : T.worldReady}
           </p>
 
           <p className="wl-switch">
-            {login ? "Nog geen account?" : "Al een account?"}{" "}
+            {login ? T.noAccount : T.haveAccount}{" "}
             <button type="button" className="wl-link" onClick={() => switchMode(login ? "signup" : "login")}>
-              {login ? "Registreren" : "Inloggen"}
+              {login ? T.register : T.login}
             </button>
           </p>
         </div>

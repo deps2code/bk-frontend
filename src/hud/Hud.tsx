@@ -5,10 +5,13 @@ import { FullMap, Minimap } from "./Maps";
 import { Help, helpSeen, markHelpSeen } from "./Help";
 import { Search } from "./Search";
 import { TreeCard } from "./TreeCard";
+import { LangSwitch } from "./LangSwitch";
+import { useT } from "../lib/i18n";
 
 export function Hud({ game }: { game: Game | null }) {
   const s = useSyncExternalStore(hud.subscribe, hud.get);
   const { mode } = useSyncExternalStore(controls.subscribe, controls.get);
+  const T = useT();
   const [panel, setPanel] = useState<Panel>(() => (helpSeen() ? null : "help"));
   const toggle = (p: Exclude<Panel, null>) => setPanel((cur) => (cur === p ? null : p));
 
@@ -46,22 +49,23 @@ export function Hud({ game }: { game: Game | null }) {
             chunk {s.chunkX},{s.chunkY} · {s.scale.toFixed(1)} px/m
           </div>
           <div>
-            {s.chunksLoaded} chunks · {s.treesDrawn} bomen in beeld
+            {s.chunksLoaded} chunks · {s.treesDrawn} {T.debugTrees}
           </div>
         </div>
       )}
-      {s.loading && <div className="hud-panel hud-status">Groningen laden…</div>}
-      {s.error && <div className="hud-panel hud-status hud-error">Er ging iets mis: {s.error}</div>}
+      {s.loading && <div className="hud-panel hud-status">{T.loadingWorld}</div>}
+      {s.error && <div className="hud-panel hud-status hud-error">{T.errorPrefix} {s.error}</div>}
 
       {game && <Minimap game={game} onOpen={() => setPanel("map")} />}
-      <div className="hud-panel hud-mode" role="radiogroup" aria-label="Hoe beweeg je?">
-        <ModeButton mode="walk" current={mode} label="Lopen" icon={WALK} />
-        <ModeButton mode="bike" current={mode} label="Fietsen" icon={BIKE} />
+      <div className="hud-panel hud-mode" role="radiogroup" aria-label={T.modeGroup}>
+        <ModeButton mode="walk" current={mode} label={T.walk} icon={WALK} />
+        <ModeButton mode="bike" current={mode} label={T.bike} icon={BIKE} />
       </div>
       <div className="hud-buttons">
-        <IconButton label="Zoeken (/)" icon={SEARCH} active={panel === "search"} onClick={() => toggle("search")} />
-        <IconButton label="Kaart (M)" icon={MAP} active={panel === "map"} onClick={() => toggle("map")} />
-        <IconButton label="Hulp (H)" icon={HELP} active={panel === "help"} onClick={() => toggle("help")} />
+        <LangSwitch />
+        <IconButton label={T.searchBtn} icon={SEARCH} active={panel === "search"} onClick={() => toggle("search")} />
+        <IconButton label={T.mapBtn} icon={MAP} active={panel === "map"} onClick={() => toggle("map")} />
+        <IconButton label={T.helpBtn} icon={HELP} active={panel === "help"} onClick={() => toggle("help")} />
       </div>
 
       {panel === "search" && game && <Search game={game} onClose={() => setPanel(null)} />}
