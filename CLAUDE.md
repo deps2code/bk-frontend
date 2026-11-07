@@ -1,79 +1,69 @@
 # CLAUDE.md
 
-3D map of Groningen's 124,990 municipal trees. MapLibre GL JS basemap +
-deck.gl interleaved `MapboxOverlay` for the trees. Static app, no backend.
-Design rationale in DESIGN.md, user docs in README.md. UI text is Dutch.
+Free-roam top-down browser game: walk through Groningen past all 124,990
+municipal trees at their real positions. Canvas 2D, React only for the HUD,
+static hosting, no backend. Roadmap and design in PLAN-game.md (README.md and
+DESIGN.md still describe the retired map app until milestone 8). UI text is Dutch.
 
 ## Commands
 
 - `npm run dev` — dev server on :5173
 - `npm run build` — `tsc -b` typecheck + Vite build (run this to typecheck)
-- `npm run build-data` — regenerate `public/data/*` from the gitignored
-  `Bomen gemeente Groningen.json` (68 MB raw GeoJSON in the project root).
-  The generated artifacts are committed, so this only needs to run when the
-  raw dataset or the pipeline changes. It prints a stats report — sanity-check
-  it (125k trees, ~53% estimated heights).
+- `npm run build-data` — trees: `Bomen gemeente Groningen.json` (68 MB,
+  gitignored) → `public/data/{trees.bin, details.json, search.json}`.
+  Sanity-check the report: 125k trees, ~53% estimated heights.
+- `node scripts/extract-osm.mjs [region]` — `raw/geofabrik/groningen-latest.osm.pbf`
+  → `raw/osm-<region>.json` (download URL in the script header; `raw/` is gitignored)
+- `node scripts/build-world.mjs [region]` — `raw/osm-<region>.json` →
+  `public/world/{index.json, c_<cx>_<cy>.bin}`. Regions live in
+  `scripts/lib/regions.mjs` (currently `centrum`).
+
+Generated `public/data/*` and `public/world/*` are committed; rerun the
+scripts only when inputs or the pipeline change.
 
 ## Architecture invariants
 
-- **Archetype order is a cross-file contract**: the 14-entry `ARCHETYPES`
-  array in `src/lib/archetypes.ts` must match the order in
-  `scripts/build-data.mjs` — `trees.bin` stores archetype as an index into it.
-  Changing either side requires regenerating the data.
-- **`trees.bin` layout** is documented at the top of `scripts/build-data.mjs`;
-  the decoder is `src/lib/loadTrees.ts`. Keep them in lockstep.
-- **Virtual data + stable identity**: deck.gl layers get `{length}` virtual
-  data objects created once in `loadTrees()`; accessors read straight from the
-  typed arrays. Never recreate these objects per render — deck would re-upload
-  all 125k instances. Filter changes must go through `DataFilterExtension`
-  uniforms only (see `filters.ts` / `layers.ts`).
-- **Near-camera LOD is additive, not a swap**: `src/lib/lod.ts` picks ≤12k
-  trees around the camera focus on `moveend` (zoom ≥ 15.3); those get a
-  detailed mesh (`trees-hi-*` layers) drawn *on top of* their still-rendered
-  base mesh — same color and opaque, so the base merging into the silhouette
-  is invisible. The `trees-hi-*` layers are `pickable: false`; picking/hover
-  stay on the base layers. Detail selection gets fresh data objects per
-  recompute (small re-upload); never touch the base layers' identity for LOD.
-- **`kiemjaar === 0` means unknown**. The year filter only excludes
-  unknown-year trees when the user narrows the slider (`yearRangeActive`);
-  keep that semantic when touching filters.
-- Heights are pre-resolved in the pipeline (class midpoint → kiemjaar estimate
-  → 8 m default) and flagged (`flags` bit 1) so the popup can say "geschat".
+- **World units are RD New meters** (EPSG:28992, x east, y north). Trees use
+  the dataset's own `X/Y_COORDINAAT`; OSM is projected with
+  `scripts/lib/rd.mjs` (≈0.3 m constant offset vs the tree data, measured).
+- **`CHUNK_SIZE` (250 m) is defined three times**: `src/game/world.ts`,
+  `scripts/lib/regions.mjs`, `scripts/build-data.mjs`. Change all + rebuild.
+- **Binary formats are cross-file contracts** — keep encoder and decoder in
+  lockstep: `trees.bin` (`scripts/build-data.mjs` ↔ `src/lib/loadTrees.ts`),
+  chunk files (`scripts/build-world.mjs` ↔ `src/game/worldFormat.ts`, incl.
+  the kind enums, whose order is also the draw order).
+- **Archetype order**: the 14-entry `ARCHETYPES` in `src/lib/archetypes.ts`
+  must match `scripts/build-data.mjs`.
+- `trees.bin` is chunk-sorted and `details.json` uses the same order — never
+  reorder one without the other.
+- Game loop (`src/game/loop.ts`) is fixed-step 60 Hz update + interpolated
+  render; the HUD reads `src/game/store.ts`, throttled to ~4 Hz. Never drive
+  per-frame state through React.
+- `kiemjaar === 0` means unknown; heights are pre-resolved and flagged
+  (`flags` bit 1 = estimated).
 
-## Gotchas learned the hard way
+## Gotchas
 
-- **deck.gl's own click path does not work here.** In interleaved
-  `MapboxOverlay` mode, mjolnir's tap recognizer never fires, so per-layer
-  `onClick` / deck-level `onClick` are dead. Clicks are routed via
-  `map.on("click")` → `overlay.pickObject()` → `pickedGlobalIndex()`
-  (`src/lib/layers.ts`). Don't "simplify" back to layer `onClick`.
-  Hover picking (deck `onHover`, used for the cursor) does work.
-- Mesh-layer picking indices are per-shape: `pickedGlobalIndex()` maps a
-  `trees-<shape>` layer index through `data.shapeIndices[shape]` back to the
-  global tree index. All per-tree arrays are indexed by that global index.
-- A hash-only `page.goto()` doesn't move the camera (same-document
-  navigation) — reload after setting the hash when testing.
-- `pickObject()` reads the GPU picking buffer, so in tests it happily "finds"
-  trees behind the DOM sidebar — clicking there hits the sidebar (and may
-  toggle a filter). Scan for click targets at x ≳ 460 only.
-- The tree layers pass `beforeId` (first symbol layer) so map labels draw on
-  top; the 3D buildings layer is inserted at the same point in `MapView.tsx`.
+- Public Overpass servers were persistently overloaded (502/504); that's why
+  OSM comes from the Geofabrik extract instead.
+- `npm install`/`uninstall` prunes the `--no-save` playwright-core; reinstall
+  it before headless checks.
+- SwiftShader fps is meaningless at large viewports — judge perf on real
+  hardware or at phone-size viewports.
 
 ## Verifying changes (headless)
 
-No test suite; verify by driving the real app:
+No test suite; drive the real app:
 
 ```bash
 npm run dev &
 npm i --no-save playwright-core   # keep package.json clean
 ```
 
-Launch the cached Chromium (`~/.cache/ms-playwright/chromium-*/chrome-linux64/chrome`)
-with `--no-sandbox --use-angle=swiftshader` (WebGL2 via SwiftShader works,
-including deck picking). In dev builds `window.__overlay` exposes the
-`MapboxOverlay` — use `__overlay.pickObject({x, y, radius})` to find clickable
-tree pixels instead of blind coordinate clicking. Useful camera hashes:
-`#m=6.55830/53.22620/17.4/0/0` (dense park, 3D mode),
-`#m=6.58000/53.21500/11.6/0/0` (whole city, dots mode).
-Check: trees render in both modes, popup opens on click, filter changes update
-the visible count, no console errors.
+Launch `~/.cache/ms-playwright/chromium-*/chrome-linux64/chrome` with
+`--no-sandbox`. Wait for `.hud-status` (loading banner) to disappear before
+screenshots. Position via hash `#p=<x>/<y>/<px-per-m>`; a `hashchange`
+teleports, so no reload is needed. Useful spots: `#p=233880/581960/9`
+(Grote Markt, spawn), `#p=233050/582520/4` (Noorderplantsoen),
+`#p=233900/582000/2` (whole Diepenring; use a big viewport). Press G for the
+chunk grid. Check: map renders, trees align with streets, no console errors.

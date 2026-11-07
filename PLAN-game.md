@@ -1,6 +1,6 @@
 # Plan: Bomenkomen as a free-roam browser game
 
-Status: **proposal, not started** (2026-10-25). Replaces the MapLibre/deck.gl
+Status: milestones 1–2 done (2026-10-25); map-app code and dependencies already removed. Replaces the MapLibre/deck.gl
 map app. The tree data pipeline and `public/data/*` are reused.
 
 ## What we are building
@@ -32,7 +32,7 @@ bare ground. HUD text is Dutch, like the current app.
 |---|---|---|
 | Renderer | **Canvas 2D**, no engine | The screenshot style is 2D. With chunk culling only a few hundred objects are on screen, so Canvas 2D is fast enough on phones and adds no dependency. If profiling says otherwise, the fallback is PixiJS v8 with the same data. |
 | World units | **meters in RD New (EPSG:28992)** | The tree dataset already has `X_COORDINAAT`/`Y_COORDINAAT` in RD, Groningen is flat, and 1 unit = 1 m keeps collision and speeds simple. Origin is the Grote Markt. |
-| Map data | **OpenStreetMap** (Overpass, at build time) | Gives roads, water, parks, landuse, rail and names. Dutch OSM building footprints come from the BAG import (`ref:bag`), so they are accurate. |
+| Map data | **OpenStreetMap** (Geofabrik `groningen-latest.osm.pbf`, at build time — Overpass was too overloaded) | Gives roads, water, parks, landuse, rail and names. Dutch OSM building footprints come from the BAG import (`ref:bag`), so they are accurate. |
 | Building heights | **3D BAG** joined on BAG id, with an OSM `building:levels` × 3 m fallback and a 9 m default | Real heights give the city its real skyline (Martinitoren, Gasunie, Forum). The screen offset uses a compressed factor so tall buildings don't cover the street. |
 | Streaming | **250 m chunks**, loaded within about 2 chunks of the player | The whole municipality is about 20 × 22 km and too big to load at once. The first chunks are small, so the player can start walking within seconds. |
 | UI framework | Keep **React for the HUD only**. The game loop is plain TypeScript in `src/game/` | React already exists in the project. The HUD reads a small store, and the 60 fps loop never touches React. |
@@ -44,7 +44,7 @@ bare ground. HUD text is Dutch, like the current app.
 ```
 scripts/
   build-data.mjs      (existing) trees -> adds RD x/y, sorted by chunk + chunk index
-  fetch-osm.mjs       NEW  Overpass -> raw/osm-*.json (gitignored, cached)
+  extract-osm.mjs     NEW  Geofabrik .osm.pbf -> raw/osm-<region>.json (gitignored)
   fetch-3dbag.mjs     NEW  3D BAG heights -> raw/3dbag-heights.json (gitignored)
   build-world.mjs     NEW  raw/* -> public/world/{index.json, c_<cx>_<cy>.bin, minimap.png}
 src/
@@ -173,8 +173,7 @@ at 390×844 with touch).
   needed, split the footprint into convex parts in the pipeline.
 - **The 3D BAG access method** (WFS vs. tile downloads) needs to be verified
   in milestone 7. Until then the levels/default heights work.
-- **Overpass limits**: a whole-municipality query may time out. Fetch per
-  sub-bbox and cache the raw responses; the run is a one-time build step.
+- ~~Overpass limits~~: resolved — OSM comes from the Geofabrik extract.
 - **Tree positions vs. OSM geometry**: a few trees will stand on roads or
   inside buildings. Leave them as they are (it is real data) but skip
   collision for trunks inside building polygons.

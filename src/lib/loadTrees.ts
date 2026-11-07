@@ -1,23 +1,16 @@
 // Decoder for public/data/trees.bin — format documented in scripts/build-data.mjs.
 
-import { ARCHETYPES, SHAPES, type Shape } from "./archetypes";
-
 export interface TreeData {
   count: number;
-  lon: Float64Array;
-  lat: Float64Array;
+  /** RD New position in decimeters. */
+  x: Int32Array;
+  y: Int32Array;
   heights: Uint8Array;
   archetypes: Uint8Array;
   years: Uint16Array;
   flags: Uint8Array; // bit0 monumental, bit1 height estimated
-  /** Per shape: global tree indices rendered with that crown mesh. */
-  shapeIndices: Record<Shape, Uint32Array>;
-  /** Stable virtual-data objects for deck.gl layers (identity must not change). */
-  dotsData: { length: number };
-  shapeData: Record<Shape, { length: number }>;
-  /** Tree count per archetype. */
-  archetypeCounts: number[];
-  monumentalCount: number;
+  /** "cx,cy" -> [start, count] into the per-tree arrays (trees are chunk-sorted). */
+  chunks: Map<string, [number, number]>;
 }
 
 export function isMonumental(data: TreeData, i: number): boolean {
@@ -39,46 +32,22 @@ export async function loadTrees(url: string): Promise<TreeData> {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`kan boomdata niet laden: ${res.status}`);
   const buf = await res.arrayBuffer();
-  const n = new DataView(buf).getUint32(0, true);
+  const dv = new DataView(buf);
+  const n = dv.getUint32(0, true);
+  const c = dv.getUint32(4, true);
 
-  let off = 4;
-  const lonI = new Int32Array(buf, off, n); off += 4 * n;
-  const latI = new Int32Array(buf, off, n); off += 4 * n;
+  const chunks = new Map<string, [number, number]>();
+  let off = 8;
+  for (let i = 0; i < c; i++, off += 12) {
+    chunks.set(`${dv.getUint16(off, true)},${dv.getUint16(off + 2, true)}`, [dv.getUint32(off + 4, true), dv.getUint32(off + 8, true)]);
+  }
+
+  const x = new Int32Array(buf, off, n); off += 4 * n;
+  const y = new Int32Array(buf, off, n); off += 4 * n;
   const years = new Uint16Array(buf, off, n); off += 2 * n;
   const heights = new Uint8Array(buf, off, n); off += n;
   const archetypes = new Uint8Array(buf, off, n); off += n;
   const flags = new Uint8Array(buf, off, n);
 
-  const lon = new Float64Array(n);
-  const lat = new Float64Array(n);
-  for (let i = 0; i < n; i++) {
-    lon[i] = lonI[i] / 1e7;
-    lat[i] = latI[i] / 1e7;
-  }
-
-  const archetypeCounts = new Array(ARCHETYPES.length).fill(0);
-  let monumentalCount = 0;
-  const perShape: Record<Shape, number[]> = { round: [], oval: [], weeping: [], conifer: [] };
-  for (let i = 0; i < n; i++) {
-    archetypeCounts[archetypes[i]]++;
-    if (flags[i] & 1) monumentalCount++;
-    perShape[ARCHETYPES[archetypes[i]].shape].push(i);
-  }
-
-  const shapeIndices = Object.fromEntries(
-    SHAPES.map((s) => [s, Uint32Array.from(perShape[s])]),
-  ) as Record<Shape, Uint32Array>;
-  const shapeData = Object.fromEntries(
-    SHAPES.map((s) => [s, { length: shapeIndices[s].length }]),
-  ) as Record<Shape, { length: number }>;
-
-  return {
-    count: n,
-    lon, lat, heights, archetypes, years, flags,
-    shapeIndices,
-    dotsData: { length: n },
-    shapeData,
-    archetypeCounts,
-    monumentalCount,
-  };
+  return { count: n, x, y, heights, archetypes, years, flags, chunks };
 }

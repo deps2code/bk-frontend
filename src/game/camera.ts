@@ -61,3 +61,9 @@ export class Camera {
 function clampScale(s: number): number {
   return Math.min(MAX_SCALE, Math.max(MIN_SCALE, s));
 }
+
+/** Canvas transform mapping chunk-local meters (y north) to device pixels. */
+export function setChunkTransform(ctx: CanvasRenderingContext2D, cam: Camera, dpr: number, ox: number, oy: number) {
+  const s = cam.scale * dpr;
+  ctx.setTransform(s, 0, 0, -s, cam.sx(ox) * dpr, cam.sy(oy) * dpr);
+}
