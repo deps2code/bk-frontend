@@ -19,9 +19,21 @@ export interface Building {
   kind: number;
   /** Meters. */
   height: number;
-  /** Rings in chunk-local meters, flat [x0, y0, x1, y1, …]; first is the outer. */
+  /**
+   * Rings in chunk-local meters, flat [x0, y0, x1, y1, …]; first is the outer.
+   * Normalized so the solid is always on the left of each edge (outer CCW,
+   * holes CW) — walls then face away from the solid on the edge's right.
+   */
   rings: Float32Array[];
-  path: Path2D;
+  /** Footprint bbox, chunk-local meters. */
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+  /** Stable per-building random in [0, 1), for colour variation. */
+  seed: number;
+  /** Render cache (Path2Ds), built lazily by render/buildings.ts. */
+  gfx?: unknown;
 }
 
 export interface Label {
@@ -105,13 +117,21 @@ export function decodeChunk(buf: ArrayBuffer, cx: number, cy: number, chunkSize:
     const height = dv.getUint16(off + 2, true) / 10;
     off += 4;
     const rings: Float32Array[] = [];
-    const path = new Path2D();
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
     for (let r = 0; r < nRings; r++) {
       const pts = readPts();
-      rings.push(pts);
-      addRing(path, pts);
+      const ccw = signedArea(pts) > 0;
+      rings.push(ccw === (r === 0) ? pts : reversePairs(pts));
+      if (r > 0) continue;
+      for (let p = 0; p < pts.length; p += 2) {
+        if (pts[p] < minX) minX = pts[p];
+        if (pts[p] > maxX) maxX = pts[p];
+        if (pts[p + 1] < minY) minY = pts[p + 1];
+        if (pts[p + 1] > maxY) maxY = pts[p + 1];
+      }
     }
-    buildings.push({ kind, height, rings, path });
+    if (!rings.length) continue;
+    buildings.push({ kind, height, rings, minX, minY, maxX, maxY, seed: hash01(cx * 73856093 ^ cy * 19349663 ^ i * 83492791) });
   }
 
   const ox = cx * chunkSize;
@@ -127,6 +147,30 @@ export function decodeChunk(buf: ArrayBuffer, cx: number, cy: number, chunkSize:
   }
 
   return { cx, cy, ox, oy, ground, lines, buildings, labels, streetNames };
+}
+
+function signedArea(pts: Float32Array): number {
+  let a = 0;
+  for (let i = 0; i < pts.length; i += 2) {
+    const j = (i + 2) % pts.length;
+    a += pts[i] * pts[j + 1] - pts[j] * pts[i + 1];
+  }
+  return a / 2;
+}
+
+function reversePairs(pts: Float32Array): Float32Array {
+  const out = new Float32Array(pts.length);
+  for (let i = 0, j = pts.length - 2; j >= 0; i += 2, j -= 2) {
+    out[i] = pts[j];
+    out[i + 1] = pts[j + 1];
+  }
+  return out;
+}
+
+function hash01(n: number): number {
+  let h = Math.imul(n ^ (n >>> 16), 0x45d9f3b);
+  h = Math.imul(h ^ (h >>> 16), 0x45d9f3b);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
 }
 
 function addRing(path: Path2D, pts: Float32Array) {

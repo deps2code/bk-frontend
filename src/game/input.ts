@@ -38,7 +38,10 @@ export class Input {
 
   set enabled(on: boolean) {
     this.on = on;
-    if (!on) this.clear();
+    if (!on) {
+      this.clear();
+      this.stick = { x: 0, y: 0 };
+    }
   }
 
   /** Movement intent: x = east, y = north, length ≤ 1. */
@@ -74,6 +77,6 @@ export class Input {
   };
 }
 
-function isTyping(target: EventTarget | null): boolean {
+export function isTyping(target: EventTarget | null): boolean {
   return target instanceof HTMLElement && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName));
 }

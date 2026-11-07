@@ -16,7 +16,10 @@ export const WORLD_BOUNDS = { minX: 227_000, minY: 569_800, maxX: 246_700, maxY:
 
 const MAX_CHUNKS = 64; // decoded chunks kept in memory (LRU beyond the view)
 const MAX_INFLIGHT = 6;
-const PREFETCH = 1; // extra ring of chunks loaded around the view
+const PREFETCH = 300; // m around the view that gets loaded (covers ground tiles + shadows)
+/** Chunks this far outside the view are still returned: their buildings and
+ * trees extend beyond the chunk (unclipped footprints, raised roofs). */
+const OBJECT_MARGIN = 60;
 
 export function chunkOf(v: number): number {
   return Math.floor(v / CHUNK_SIZE);
@@ -25,6 +28,10 @@ export function chunkOf(v: number): number {
 interface WorldIndex {
   version: number;
   chunkSize: number;
+  /** Built region in chunk coordinates (inclusive). */
+  bounds: { cx0: number; cy0: number; cx1: number; cy1: number };
+  /** Overview map: SVG whose viewBox is this RD bbox, north up. */
+  minimap: Bounds & { file: string };
   chunks: [number, number, number][];
   names: string[];
 }
@@ -69,19 +76,73 @@ export class World {
     return this.loaded.size;
   }
 
+  /** Overview map file + its RD bbox, once the index is loaded. */
+  get minimap(): (Bounds & { url: string }) | null {
+    const m = this.index?.minimap;
+    return m ? { ...m, url: `${this.base}world/${m.file}` } : null;
+  }
+
+  /** Is (x, y) inside the built region (where there is map data)? */
+  covers(x: number, y: number): boolean {
+    const b = this.index?.bounds;
+    if (!b) return false;
+    const cx = chunkOf(x), cy = chunkOf(y);
+    return cx >= b.cx0 && cx <= b.cx1 && cy >= b.cy0 && cy <= b.cy1;
+  }
+
+  /** Street name of the nearest named road within `maxDist` m, from loaded chunks. */
+  streetNear(x: number, y: number, maxDist: number): string | null {
+    if (!this.index) return null;
+    let best: number | null = null;
+    let bestD = maxDist * maxDist;
+    for (let cy = chunkOf(y - maxDist); cy <= chunkOf(y + maxDist); cy++) {
+      for (let cx = chunkOf(x - maxDist); cx <= chunkOf(x + maxDist); cx++) {
+        const c = this.chunkAt(cx, cy);
+        if (!c) continue;
+        const lx = x - c.ox, ly = y - c.oy;
+        for (const { nameId, pts } of c.streetNames) {
+          for (let i = 0; i + 3 < pts.length; i += 2) {
+            const d = segDist2(lx, ly, pts[i], pts[i + 1], pts[i + 2], pts[i + 3]);
+            if (d < bestD) {
+              bestD = d;
+              best = nameId;
+            }
+          }
+        }
+      }
+    }
+    return best === null ? null : (this.index.names[best] ?? null);
+  }
+
+  /** Index loaded: chunk availability is known. */
+  get ready(): boolean {
+    return this.index !== null;
+  }
+
+  /** A decoded chunk if it is in memory. */
+  chunkAt(cx: number, cy: number): Chunk | null {
+    return this.loaded.get(`${cx},${cy}`)?.chunk ?? null;
+  }
+
+  /** True while a chunk exists in the world but isn't decoded yet. */
+  isPending(cx: number, cy: number): boolean {
+    const key = `${cx},${cy}`;
+    return this.available.has(key) && !this.loaded.has(key);
+  }
+
   /** Chunks overlapping `b` that are loaded; also schedules loads and evictions. */
   visible(b: Bounds): Chunk[] {
     this.frame++;
     const out: Chunk[] = [];
     if (!this.index) return out;
 
-    const cx0 = chunkOf(b.minX), cx1 = chunkOf(b.maxX);
-    const cy0 = chunkOf(b.minY), cy1 = chunkOf(b.maxY);
+    const cx0 = chunkOf(b.minX - OBJECT_MARGIN), cx1 = chunkOf(b.maxX + OBJECT_MARGIN);
+    const cy0 = chunkOf(b.minY - OBJECT_MARGIN), cy1 = chunkOf(b.maxY + OBJECT_MARGIN);
     const want: { key: string; cx: number; cy: number; d: number }[] = [];
     const midX = (cx0 + cx1) / 2, midY = (cy0 + cy1) / 2;
 
-    for (let cy = cy0 - PREFETCH; cy <= cy1 + PREFETCH; cy++) {
-      for (let cx = cx0 - PREFETCH; cx <= cx1 + PREFETCH; cx++) {
+    for (let cy = chunkOf(b.minY - PREFETCH); cy <= chunkOf(b.maxY + PREFETCH); cy++) {
+      for (let cx = chunkOf(b.minX - PREFETCH); cx <= chunkOf(b.maxX + PREFETCH); cx++) {
         const key = `${cx},${cy}`;
         const entry = this.loaded.get(key);
         const inView = cx >= cx0 && cx <= cx1 && cy >= cy0 && cy <= cy1;
@@ -129,4 +190,12 @@ export class World {
       if (e.used < this.frame) this.loaded.delete(key);
     }
   }
+}
+
+function segDist2(px: number, py: number, ax: number, ay: number, bx: number, by: number): number {
+  const dx = bx - ax, dy = by - ay;
+  const len2 = dx * dx + dy * dy;
+  const t = len2 > 0 ? Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / len2)) : 0;
+  const qx = ax + t * dx - px, qy = ay + t * dy - py;
+  return qx * qx + qy * qy;
 }

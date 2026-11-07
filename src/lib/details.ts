@@ -30,8 +30,24 @@ export interface SearchEntry {
 const base = import.meta.env.BASE_URL;
 
 let detailsPromise: Promise<Details> | null = null;
+let detailsLoaded: Details | null = null;
+
+/** The details if they have finished loading, without triggering a load. */
+export function peekDetails(): Details | null {
+  return detailsLoaded;
+}
+
 export function getDetails(): Promise<Details> {
-  detailsPromise ??= fetch(`${base}data/details.json`).then((r) => r.json());
+  detailsPromise ??= fetch(`${base}data/details.json`)
+    .then((r) => {
+      if (!r.ok) throw new Error(`details.json: ${r.status}`);
+      return r.json() as Promise<Details>;
+    })
+    .then((d) => (detailsLoaded = d))
+    .catch((e) => {
+      detailsPromise = null; // allow a retry on the next request
+      throw e;
+    });
   return detailsPromise;
 }
 
