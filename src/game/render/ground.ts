@@ -1,24 +1,27 @@
-// Ground layer: base fill, landuse/water polygons and line features (roads,
-// paths, cycleways, rail, waterways) for the visible chunks. Drawn directly
-// each frame for now; milestone 3 caches it per chunk.
+// Ground features of a set of chunks: landuse/water polygons, line features
+// (roads, paths, cycleways, rail, waterways) and building/tree shadows. Painted
+// into cached ground tiles by groundCache.ts; `place(c)` sets the transform
+// mapping a chunk's local meters to the target canvas.
 
-import { setChunkTransform, type Camera } from "../camera";
 import type { Chunk } from "../worldFormat";
-import { BASE_GROUND, BRIDGE_CASING, GROUND_COLORS, LINE_COLORS, ROAD_CASING } from "./palette";
+import type { TreeData } from "../../lib/loadTrees";
+import { SHADOW_COLOR, chunkShadowPath } from "./shadows";
+import { BRIDGE_CASING, GROUND_COLORS, LINE_COLORS, ROAD_CASING } from "./palette";
 
 const CAR_ROAD_MAX_KIND = 3; // major, medium, minor, service
 
-export function drawGround(ctx: CanvasRenderingContext2D, cam: Camera, dpr: number, chunks: Chunk[]) {
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.fillStyle = BASE_GROUND;
-  ctx.fillRect(0, 0, cam.viewW, cam.viewH);
-
+export function paintGround(
+  ctx: CanvasRenderingContext2D,
+  chunks: Chunk[],
+  trees: TreeData | null,
+  place: (c: Chunk) => void,
+) {
   for (let kind = 0; kind < GROUND_COLORS.length; kind++) {
     ctx.fillStyle = GROUND_COLORS[kind];
     for (const c of chunks) {
       const path = c.ground[kind];
       if (!path) continue;
-      setChunkTransform(ctx, cam, dpr, c.ox, c.oy);
+      place(c);
       ctx.fill(path, "evenodd");
     }
   }
@@ -28,7 +31,7 @@ export function drawGround(ctx: CanvasRenderingContext2D, cam: Camera, dpr: numb
   for (const bridge of [false, true]) {
     // casings first so crossing roads merge cleanly
     for (const c of chunks) {
-      setChunkTransform(ctx, cam, dpr, c.ox, c.oy);
+      place(c);
       for (const g of c.lines) {
         if (g.bridge !== bridge || (g.kind > CAR_ROAD_MAX_KIND && !bridge)) continue;
         ctx.strokeStyle = bridge ? BRIDGE_CASING : ROAD_CASING;
@@ -37,7 +40,7 @@ export function drawGround(ctx: CanvasRenderingContext2D, cam: Camera, dpr: numb
       }
     }
     for (const c of chunks) {
-      setChunkTransform(ctx, cam, dpr, c.ox, c.oy);
+      place(c);
       for (const g of c.lines) {
         if (g.bridge !== bridge) continue;
         ctx.strokeStyle = LINE_COLORS[g.kind];
@@ -45,6 +48,17 @@ export function drawGround(ctx: CanvasRenderingContext2D, cam: Camera, dpr: numb
         ctx.stroke(g.path);
       }
     }
+    // shadows fall on ground, water and streets, but bridges pass over them
+    if (!bridge) paintShadows(ctx, chunks, trees, place);
   }
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+function paintShadows(ctx: CanvasRenderingContext2D, chunks: Chunk[], trees: TreeData | null, place: (c: Chunk) => void) {
+  ctx.fillStyle = SHADOW_COLOR;
+  ctx.globalCompositeOperation = "multiply";
+  for (const c of chunks) {
+    place(c);
+    ctx.fill(chunkShadowPath(c, trees));
+  }
+  ctx.globalCompositeOperation = "source-over";
 }

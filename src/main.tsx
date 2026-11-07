@@ -4,6 +4,7 @@ import "@fontsource/lilita-one/latin-400.css";
 import "@fontsource-variable/baloo-2";
 import "./hud/hud.css";
 import "./hud/welcome.css";
+import "./hud/treeCard.css";
 import App from "./App";
 
 createRoot(document.getElementById("root")!).render(

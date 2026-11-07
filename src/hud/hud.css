@@ -15,9 +15,11 @@ html, body, #root { height: 100%; margin: 0; overflow: hidden; background: #e4dc
   overscroll-behavior: none;
   user-select: none;
   -webkit-user-select: none;
+  -webkit-touch-callout: none; /* no long-press menu on the canvas */
+  -webkit-tap-highlight-color: transparent;
 }
 
-.game canvas {
+.game > canvas {
   outline: none;
   display: block;
   width: 100%;
@@ -38,34 +40,12 @@ html, body, #root { height: 100%; margin: 0; overflow: hidden; background: #e4dc
 }
 
 .hud-debug {
-  top: calc(12px + env(safe-area-inset-top));
+  top: calc(62px + env(safe-area-inset-top));
   left: calc(12px + env(safe-area-inset-left));
   font-variant-numeric: tabular-nums;
   color: var(--hud-muted);
 }
 .hud-fps { color: var(--hud-accent); font-weight: 700; font-size: 14px; }
-
-.hud-hint {
-  bottom: calc(12px + env(safe-area-inset-bottom));
-  left: 50%;
-  transform: translateX(-50%);
-  white-space: nowrap;
-}
-.hud-hint kbd {
-  display: inline-block;
-  min-width: 1.6em;
-  padding: 0 4px;
-  margin: 0 1px;
-  border-radius: 4px;
-  background: rgba(255, 255, 255, 0.14);
-  font: inherit;
-  font-weight: 700;
-  text-align: center;
-}
-
-@media (hover: none) and (pointer: coarse) {
-  .hud-hint { display: none; } /* touch controls arrive in milestone 5 */
-}
 
 .hud-status {
   top: 50%;
@@ -75,3 +55,241 @@ html, body, #root { height: 100%; margin: 0; overflow: hidden; background: #e4dc
   font-weight: 600;
 }
 .hud-error { background: rgba(140, 40, 30, 0.9); }
+
+/* walk / bike toggle */
+.hud-mode {
+  right: calc(12px + env(safe-area-inset-right));
+  bottom: calc(12px + env(safe-area-inset-bottom));
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 999px;
+  pointer-events: auto;
+}
+.hud-mode-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 14px 0 10px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--hud-muted);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.hud-mode-btn svg { width: 20px; height: 20px; fill: currentColor; }
+.hud-mode-btn:hover { color: var(--hud-ink); }
+.hud-mode-btn.is-active { background: #84bd00; color: #22320a; }
+.hud-mode-btn:focus-visible { outline: 2px solid var(--hud-accent); outline-offset: 2px; }
+
+
+/* ---- where am I --------------------------------------------------------- */
+.hud-place {
+  top: calc(12px + env(safe-area-inset-top));
+  left: calc(12px + env(safe-area-inset-left));
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(100% - 200px);
+  padding: 8px 14px 8px 10px;
+  border-radius: 999px;
+  font-family: "Baloo 2 Variable", system-ui, sans-serif;
+}
+.hud-place svg { flex: none; width: 20px; height: 20px; fill: #84bd00; }
+.hud-place-street {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 15px;
+  font-weight: 800;
+}
+.hud-place-buurt {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  color: var(--hud-muted);
+}
+.hud-place-buurt::before { content: "· "; }
+
+/* ---- top-right buttons ------------------------------------------------- */
+.hud-buttons {
+  position: absolute;
+  top: calc(12px + env(safe-area-inset-top));
+  right: calc(12px + env(safe-area-inset-right));
+  display: flex;
+  gap: 8px;
+}
+.hud-icon-btn {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: none;
+  border-radius: 50%;
+  background: var(--hud-bg);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+  color: var(--hud-ink);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.hud-icon-btn svg { width: 22px; height: 22px; fill: currentColor; }
+.hud-icon-btn:hover { color: #fff; }
+.hud-icon-btn.is-active { background: #84bd00; color: #22320a; }
+.hud-icon-btn:focus-visible { outline: 2px solid var(--hud-accent); outline-offset: 2px; }
+
+.tree-card { top: calc(66px + env(safe-area-inset-top)); }
+
+/* ---- minimap ------------------------------------------------------------ */
+.hud-minimap {
+  position: absolute;
+  right: calc(12px + env(safe-area-inset-right));
+  bottom: calc(66px + env(safe-area-inset-bottom));
+  width: 168px;
+  height: 168px;
+  padding: 0;
+  overflow: hidden;
+  border: 3px solid #5a3f2b;
+  border-radius: 16px;
+  background: #e7dfc8;
+  box-shadow: 0 4px 0 #3e2a1c, 0 8px 18px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.hud-minimap canvas { display: block; width: 100%; height: 100%; }
+.hud-minimap:focus-visible { outline: 3px solid var(--hud-accent); outline-offset: 2px; }
+
+/* ---- sheets: search, map, help (welcome-screen palette) ---------------- */
+.hud-sheet {
+  position: absolute;
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 3px solid var(--cocoa-dark);
+  background: linear-gradient(180deg, var(--oat-light), var(--oat));
+  box-shadow: 0 5px 0 var(--cocoa-deep), 0 14px 30px rgba(40, 28, 15, 0.35);
+  color: var(--ink);
+  font-family: "Baloo 2 Variable", system-ui, sans-serif;
+  animation: tc-pop 0.22s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+.hud-sheet h2 {
+  margin: 0;
+  font-family: "Lilita One", system-ui, sans-serif;
+  font-weight: 400;
+  font-size: 24px;
+  color: var(--cocoa-deep);
+}
+
+.search-sheet {
+  top: calc(66px + env(safe-area-inset-top));
+  right: calc(12px + env(safe-area-inset-right));
+  width: 340px;
+  padding: 10px;
+}
+.search-field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 48px;
+  padding: 0 14px;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #c6da95, var(--pistachio));
+  border: 2px solid var(--pistachio-dark);
+}
+.search-field:focus-within { border-color: var(--kiwi-dark); box-shadow: 0 0 0 4px rgba(132, 189, 0, 0.35); }
+.search-field svg { flex: none; width: 22px; height: 22px; fill: var(--cocoa-dark); }
+.search-field input {
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  font: inherit;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.search-field input::placeholder { color: rgba(62, 42, 28, 0.62); }
+.search-note { margin: 10px 4px 2px; font-size: 14px; font-weight: 600; color: var(--cocoa); }
+.search-results { list-style: none; margin: 8px 0 0; padding: 0; }
+.search-results button {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 10px;
+  background: none;
+  font: inherit;
+  text-align: left;
+  color: var(--ink);
+  cursor: pointer;
+}
+.search-results button.is-active { background: rgba(132, 189, 0, 0.25); }
+.search-name { font-weight: 800; font-size: 15px; }
+.search-meta { flex: none; font-size: 12px; font-weight: 600; color: var(--cocoa); }
+
+.hud-overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(40, 28, 15, 0.45);
+}
+.map-sheet { position: relative; width: min(880px, 100%); }
+.sheet-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.sheet-head .tc-close { position: static; }
+.map-canvas {
+  display: block;
+  width: 100%;
+  aspect-ratio: 10 / 9; /* ≈ the region's shape; letterboxed when capped */
+  max-height: min(70vh, 640px);
+  border-radius: 10px;
+  border: 2px solid var(--cocoa);
+  cursor: crosshair;
+}
+.sheet-foot { margin: 8px 2px 0; font-size: 14px; font-weight: 600; color: var(--cocoa); }
+.gold-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin: 0 2px -1px;
+  border-radius: 50%;
+  background: #e6b422;
+}
+
+.help-sheet {
+  left: 50%;
+  bottom: calc(70px + env(safe-area-inset-bottom));
+  width: min(440px, calc(100% - 24px));
+  transform: translateX(-50%);
+  animation: none;
+}
+.help-sheet dl { display: grid; gap: 6px; margin: 10px 0 14px; }
+.help-sheet dl div { display: grid; grid-template-columns: 140px 1fr; gap: 10px; font-size: 14px; }
+.help-sheet dt { font-weight: 800; color: var(--cocoa-dark); }
+.help-sheet dd { margin: 0; font-weight: 600; }
+.help-ok { height: 52px; font-size: 22px; }
+
+@media (max-width: 720px) {
+  .hud-place { max-width: calc(100% - 180px); }
+  .hud-place-buurt { display: none; }
+  .hud-minimap {
+    top: calc(66px + env(safe-area-inset-top));
+    bottom: auto;
+    width: 108px;
+    height: 108px;
+    border-width: 2px;
+    border-radius: 12px;
+  }
+  .search-sheet { left: calc(12px + env(safe-area-inset-left)); width: auto; }
+  .help-sheet dl div { grid-template-columns: 112px 1fr; }
+}

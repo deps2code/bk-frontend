@@ -5,6 +5,7 @@
 // Reads  raw/osm-<region>.json (see extract-osm.mjs)
 // Writes public/world/index.json        chunk list + shared name table
 //        public/world/c_<cx>_<cy>.bin   one file per non-empty chunk
+//        public/world/minimap.svg       simplified overview map of the region
 //
 // FORMAT c_<cx>_<cy>.bin (little endian). Points are Int16 x/y pairs in
 // decimeters relative to the chunk's south-west corner (cx*250, cy*250).
@@ -24,13 +25,14 @@
 import { readFileSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { CHUNK_SIZE, REGIONS } from "./lib/regions.mjs";
+import { CHUNK_SIZE, REGIONS, regionBBoxRD } from "./lib/regions.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const OUT = join(ROOT, "public", "world");
 const GROUND_PAD = 1;
 const LINE_PAD = 25;
 const NO_NAME = 0xffff;
+const BASE_GROUND = "#e7dfc8"; // = src/game/render/palette.ts
 
 // ---- enums (order = draw order; must match src/game/worldFormat.ts) ----
 const G = { farmland: 0, industrial: 1, grass: 2, wood: 3, pitch: 4, sand: 5, water: 6, paved: 7 };
@@ -175,6 +177,35 @@ function bboxOf(rings) {
     }
   }
   return b;
+}
+
+/** Douglas–Peucker on a flat [x0, y0, …] polyline. */
+function simplify(xy, tol) {
+  const n = xy.length / 2;
+  if (n <= 2) return xy;
+  const keep = new Uint8Array(n);
+  keep[0] = keep[n - 1] = 1;
+  const stack = [[0, n - 1]];
+  while (stack.length) {
+    const [a, b] = stack.pop();
+    const ax = xy[2 * a], ay = xy[2 * a + 1], bx = xy[2 * b], by = xy[2 * b + 1];
+    const len = Math.hypot(bx - ax, by - ay) || 1;
+    let worst = -1, dmax = tol;
+    for (let i = a + 1; i < b; i++) {
+      const d = Math.abs((bx - ax) * (ay - xy[2 * i + 1]) - (ax - xy[2 * i]) * (by - ay)) / len;
+      if (d > dmax) {
+        dmax = d;
+        worst = i;
+      }
+    }
+    if (worst >= 0) {
+      keep[worst] = 1;
+      stack.push([a, worst], [worst, b]);
+    }
+  }
+  const out = [];
+  for (let i = 0; i < n; i++) if (keep[i]) out.push(xy[2 * i], xy[2 * i + 1]);
+  return out;
 }
 
 /** Signed area and centroid of a ring (open or closed). */
@@ -463,7 +494,77 @@ for (const c of [...chunks.values()].sort((a, b) => a.cy - b.cy || a.cx - b.cx))
   total += bytes.length;
 }
 
-writeFileSync(join(OUT, "index.json"), JSON.stringify({ version: 1, region: name, chunkSize: CHUNK_SIZE, bounds: region, chunks: index, names }));
+// ---- minimap.svg ---------------------------------------------------------
+// Overview for the HUD minimap: ground, water, roads and buildings, simplified.
+// viewBox is the region bbox in meters with y flipped (north up), so the
+// client maps RD -> image with one offset + scale.
+
+const rb = regionBBoxRD(region);
+const MAP = {
+  ground: ["#dfe2b4", "#dcd6cb", "#b5d68a", "#8dbb6e", "#a5d38c", "#efdfae", "#86c5e3", "#d8d1c2"],
+  roads: [[L.major, 16, "#fbf8f1"], [L.medium, 12, "#fbf8f1"], [L.minor, 8, "#f6f2e9"], [L.service, 5, "#f1ece1"], [L.rail, 3, "#8e877c"]],
+  building: "#c9b9a1",
+  water: "#86c5e3",
+};
+const svgPt = (x, y) => `${Math.round(x - rb.minX)} ${Math.round(rb.maxY - y)}`;
+function svgRing(r, tol) {
+  const s = simplify(openRing(r), tol);
+  if (s.length < 6) return "";
+  let d = `M${svgPt(s[0], s[1])}`;
+  for (let i = 2; i < s.length; i += 2) d += `L${svgPt(s[i], s[i + 1])}`;
+  return d + "Z";
+}
+function svgLine(xy, tol) {
+  const s = simplify(xy, tol);
+  let d = `M${svgPt(s[0], s[1])}`;
+  for (let i = 2; i < s.length; i += 2) d += `L${svgPt(s[i], s[i + 1])}`;
+  return d;
+}
+const inRegion = (b) => b.maxX >= rb.minX && b.minX <= rb.maxX && b.maxY >= rb.minY && b.minY <= rb.maxY;
+
+const groundD = MAP.ground.map(() => []);
+const buildingD = [];
+for (const p of polygons) {
+  if (!inRegion(bboxOf(p.outer))) continue;
+  const rings = [...p.outer, ...p.inner];
+  if (p.tags.building && p.tags.building !== "no") {
+    if (ringStats(p.outer[0]).area >= 25) buildingD.push(rings.map((r) => svgRing(r, 1.5)).join(""));
+    continue;
+  }
+  const kind = groundKind(p.tags);
+  if (kind >= 0) groundD[kind].push(rings.map((r) => svgRing(r, 2)).join(""));
+}
+const roadD = new Map(); // kind -> [d]
+const waterLines = new Map(); // width -> [d]
+for (const l of lines) {
+  const k = lineKind(l.tags);
+  if (!k || !inRegion(bboxOf([l.xy]))) continue;
+  if (k.kind === L.water) {
+    const w = Math.max(3, Math.round(k.width));
+    if (!waterLines.has(w)) waterLines.set(w, []);
+    waterLines.get(w).push(svgLine(l.xy, 2));
+  } else if (MAP.roads.some(([rk]) => rk === k.kind)) {
+    if (!roadD.has(k.kind)) roadD.set(k.kind, []);
+    roadD.get(k.kind).push(svgLine(l.xy, 2));
+  }
+}
+const W = rb.maxX - rb.minX, H = rb.maxY - rb.minY;
+let svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">`;
+svg += `<rect width="${W}" height="${H}" fill="${BASE_GROUND}"/>`;
+groundD.forEach((ds, k) => ds.length && (svg += `<path fill="${MAP.ground[k]}" fill-rule="evenodd" d="${ds.join("")}"/>`));
+for (const [w, ds] of waterLines) svg += `<path fill="none" stroke="${MAP.water}" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round" d="${ds.join("")}"/>`;
+for (const [kind, w, color] of [...MAP.roads].reverse()) {
+  const ds = roadD.get(kind);
+  if (ds) svg += `<path fill="none" stroke="${color}" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round" d="${ds.join("")}"/>`;
+}
+svg += `<path fill="${MAP.building}" fill-rule="evenodd" d="${buildingD.join("")}"/>`;
+svg += "</svg>";
+writeFileSync(join(OUT, "minimap.svg"), svg);
+
+writeFileSync(
+  join(OUT, "index.json"),
+  JSON.stringify({ version: 1, region: name, chunkSize: CHUNK_SIZE, bounds: region, minimap: { file: "minimap.svg", ...rb }, chunks: index, names }),
+);
 
 // ---- report --------------------------------------------------------------
 
@@ -473,4 +574,5 @@ console.log(`region ${name}: ${index.length} chunks, ${(total / 1e6).toFixed(2)}
 console.log(`ground polygons per kind: ${Object.keys(G).map((k, i) => `${k} ${counts.ground[i]}`).join(", ")}`);
 console.log(`lines per kind:           ${Object.keys(L).map((k, i) => `${k} ${counts.lines[i]}`).join(", ")}`);
 console.log(`buildings: ${nB} — height from tag ${pct(stats.hTag, nB)}, levels ${pct(stats.hLevels, nB)}, default ${pct(stats.hDefault, nB)}`);
+console.log(`minimap.svg ${(svg.length / 1e6).toFixed(2)} MB (${W}×${H} m)`);
 console.log(`labels: ${counts.labels}, names: ${names.length}, broken rings: ${stats.brokenRings}, buildings outside region: ${stats.droppedOutside}`);
